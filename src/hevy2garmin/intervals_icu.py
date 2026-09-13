@@ -66,9 +66,7 @@ def try_delete_icu_activity(garmin_activity_id: int, workout_start: str) -> bool
         # Shape-check inside the try: a 200 carrying a dict or a string would
         # otherwise blow up in the loop below, which sits outside it.
         if not isinstance(activities, list):
-            logger.warning(
-                "ICU cleanup: unexpected response type %s", type(activities).__name__
-            )
+            logger.warning("ICU cleanup: unexpected response type %s", type(activities).__name__)
             return False
     except Exception as e:
         logger.warning("ICU cleanup: failed to list activities: %s", e)
@@ -83,7 +81,9 @@ def try_delete_icu_activity(garmin_activity_id: int, workout_start: str) -> bool
     if icu_id is None:
         logger.warning(
             "ICU cleanup: no activity with external_id=%s in window %s–%s — a stale duplicate may remain on intervals.icu",
-            garmin_activity_id, oldest, newest,
+            garmin_activity_id,
+            oldest,
+            newest,
         )
         return False
 

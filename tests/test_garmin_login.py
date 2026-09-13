@@ -46,11 +46,14 @@ def test_begin_needs_mfa_stores_session():
     assert garmin_login._store.get(out["session_id"], 0.0) is not None
 
 
-@pytest.mark.parametrize("exc,status", [
-    (GarminConnectAuthenticationError("bad"), "invalid_credentials"),
-    (GarminConnectTooManyRequestsError("429"), "rate_limited"),
-    (GarminConnectConnectionError("down"), "error"),
-])
+@pytest.mark.parametrize(
+    "exc,status",
+    [
+        (GarminConnectAuthenticationError("bad"), "invalid_credentials"),
+        (GarminConnectTooManyRequestsError("429"), "rate_limited"),
+        (GarminConnectConnectionError("down"), "error"),
+    ],
+)
 def test_begin_exception_mapping(exc, status):
     with patch("hevy2garmin.garmin_login.GarminAuth") as GA:
         GA.return_value.login.side_effect = exc
@@ -83,8 +86,8 @@ def test_complete_wrong_code_keeps_entry():
 def test_pending_store_ttl_eviction():
     store = _PendingStore(ttl=600)
     sid = store.put(MagicMock(), now=1000.0)
-    assert store.get(sid, now=1500.0) is not None       # within TTL
-    assert store.get(sid, now=1000.0 + 601) is None      # expired
+    assert store.get(sid, now=1500.0) is not None  # within TTL
+    assert store.get(sid, now=1000.0 + 601) is None  # expired
 
 
 def test_complete_empty_code_is_mfa_failed():
@@ -110,10 +113,16 @@ class TestTokenStoreSelection:
 
         import hevy2garmin.garmin_login as gl
 
-        sentinel = {"email": "e@x.com", "password": "pw", "store": object(),
-                    "token_dir": "/tmp/.garminconnect"}
-        with patch("hevy2garmin.garmin.auth_kwargs", return_value=dict(sentinel)) as kw, \
-             patch.object(gl, "GarminAuth") as auth_cls:
+        sentinel = {
+            "email": "e@x.com",
+            "password": "pw",
+            "store": object(),
+            "token_dir": "/tmp/.garminconnect",
+        }
+        with (
+            patch("hevy2garmin.garmin.auth_kwargs", return_value=dict(sentinel)) as kw,
+            patch.object(gl, "GarminAuth") as auth_cls,
+        ):
             auth_cls.return_value.login.return_value = MagicMock()
             gl.begin("e@x.com", "pw")
 
@@ -138,8 +147,10 @@ class TestTokenStoreSelection:
 
         from hevy2garmin.garmin import auth_kwargs
 
-        with patch("hevy2garmin.db.get_database_url", return_value="postgresql://x/y"), \
-             patch("garmin_auth.storage.DBTokenStore", return_value=MagicMock()) as store:
+        with (
+            patch("hevy2garmin.db.get_database_url", return_value="postgresql://x/y"),
+            patch("garmin_auth.storage.DBTokenStore", return_value=MagicMock()) as store,
+        ):
             kwargs = auth_kwargs("e@x.com", "pw")
         store.assert_called_once_with("postgresql://x/y")
         assert "store" in kwargs

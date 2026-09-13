@@ -36,6 +36,23 @@ jobs:
       - name: Exercise map drift (TypeScript copy matches the Python source of truth)
         run: python scripts/gen_typescript_map.py --check
 
+  check-ruff:
+    # Pinned: ruff 0.16 enables 826 rules by default where 0.14 enabled far fewer, so an
+    # unpinned `uvx ruff` moves the gate with every release (#553). Bump the version here and
+    # in pyproject's comment together, and re-run the campaign at the new version first.
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: ruff check
+        run: uvx ruff@0.16.7 check .
+
+      - name: ruff format --check
+        run: uvx ruff@0.16.7 format --check .
+
   check-postgres:
     name: Tests (Postgres)
     runs-on: ubuntu-latest

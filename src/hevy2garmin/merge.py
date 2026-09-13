@@ -14,9 +14,9 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from hevy2garmin._isotime import parse_iso
+from datetime import timedelta
 
+from hevy2garmin._isotime import parse_iso
 from hevy2garmin.garmin import (
     find_matching_garmin_activity,
     generate_description,
@@ -37,6 +37,7 @@ _consecutive_failures = 0
 @dataclass
 class MergeResult:
     """Result of a merge attempt."""
+
     merged: bool
     activity_id: int | None = None
     fallback_reason: str | None = None
@@ -103,17 +104,42 @@ def _circuit_breaker_tripped() -> bool:
 # These are the categories from the FIT SDK profile, used in the
 # exerciseSets PUT payload.
 _CATEGORY_NAMES: dict[int, str] = {
-    0: "BENCH_PRESS", 1: "CALF_RAISE", 2: "CARDIO", 3: "CARRY",
-    4: "CHOP", 5: "CORE", 6: "CRUNCH", 7: "CURL", 8: "DEADLIFT",
-    9: "FLYE", 10: "HIP_RAISE", 11: "HIP_STABILITY", 12: "HIP_SWING",
-    13: "HYPEREXTENSION", 14: "LATERAL_RAISE", 15: "LEG_CURL",
-    16: "LEG_RAISE", 17: "LUNGE", 18: "OLYMPIC_LIFT", 19: "PLANK",
-    20: "PLYO", 21: "PULL_UP", 22: "PUSH_UP", 23: "ROW",
-    24: "SHOULDER_PRESS", 25: "SHOULDER_STABILITY", 26: "SHRUG",
-    27: "SIT_UP", 28: "SQUAT", 29: "TOTAL_BODY",
-    30: "TRICEPS_EXTENSION", 31: "WARM_UP", 32: "RUN",
+    0: "BENCH_PRESS",
+    1: "CALF_RAISE",
+    2: "CARDIO",
+    3: "CARRY",
+    4: "CHOP",
+    5: "CORE",
+    6: "CRUNCH",
+    7: "CURL",
+    8: "DEADLIFT",
+    9: "FLYE",
+    10: "HIP_RAISE",
+    11: "HIP_STABILITY",
+    12: "HIP_SWING",
+    13: "HYPEREXTENSION",
+    14: "LATERAL_RAISE",
+    15: "LEG_CURL",
+    16: "LEG_RAISE",
+    17: "LUNGE",
+    18: "OLYMPIC_LIFT",
+    19: "PLANK",
+    20: "PLYO",
+    21: "PULL_UP",
+    22: "PUSH_UP",
+    23: "ROW",
+    24: "SHOULDER_PRESS",
+    25: "SHOULDER_STABILITY",
+    26: "SHRUG",
+    27: "SIT_UP",
+    28: "SQUAT",
+    29: "TOTAL_BODY",
+    30: "TRICEPS_EXTENSION",
+    31: "WARM_UP",
+    32: "RUN",
     65534: "UNKNOWN",
 }
+
 
 def _category_to_string(cat_id: int) -> str:
     return _CATEGORY_NAMES.get(cat_id, "UNKNOWN")
@@ -197,16 +223,16 @@ def _push_stripping_offenders(client, activity_id: int, payload: dict) -> None:
         head = cand[:mid]
         try:
             push_exercise_sets(client, activity_id, _strip_names_for(payload, set(head)))
-            cand = head          # stripping head fixed it → offender(s) in head
-        except Exception as e:   # noqa: BLE001
+            cand = head  # stripping head fixed it → offender(s) in head
+        except Exception as e:
             if not _is_subcategory_rejection(e):
                 raise
-            cand = cand[mid:]    # still rejected → offender(s) in the tail
+            cand = cand[mid:]  # still rejected → offender(s) in the tail
     # Narrowed to one candidate: strip just it. If that still fails there is more
     # than one offender split across halves, so fall back to stripping every name.
     try:
         push_exercise_sets(client, activity_id, _strip_names_for(payload, set(cand)))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         if not _is_subcategory_rejection(e):
             raise
         push_exercise_sets(client, activity_id, _strip_exercise_names(payload))
@@ -224,6 +250,7 @@ def _is_subcategory_rejection(exc: Exception) -> bool:
 # ---------------------------------------------------------------------------
 # Payload builder
 # ---------------------------------------------------------------------------
+
 
 def build_exercise_sets_payload(
     hevy_workout: dict,
@@ -279,12 +306,14 @@ def build_exercise_sets_payload(
             else:
                 rest_dur = rest_sets_s
 
-            all_sets.append({
-                "ex_idx": ex_idx,
-                "set_data": s,
-                "set_dur": set_dur,
-                "rest_dur": rest_dur,
-            })
+            all_sets.append(
+                {
+                    "ex_idx": ex_idx,
+                    "set_data": s,
+                    "set_dur": set_dur,
+                    "rest_dur": rest_dur,
+                }
+            )
 
     # Scale to fit actual activity duration
     ideal_total = sum(si["set_dur"] + si["rest_dur"] for si in all_sets)
@@ -301,7 +330,9 @@ def build_exercise_sets_payload(
         ex_idx = si["ex_idx"]
         ex = exercises[ex_idx]
 
-        cat_id, sub_id, _ = lookup_exercise(ex.get("title") or ex.get("name", "Unknown"), ex.get("exercise_template_id"))
+        cat_id, sub_id, _ = lookup_exercise(
+            ex.get("title") or ex.get("name", "Unknown"), ex.get("exercise_template_id")
+        )
         cat_str = _category_to_string(cat_id)
         sub_name = _exercise_to_string(cat_id, sub_id)
         # Garmin rejects an UNKNOWN category, so fall back to the generic
@@ -370,6 +401,7 @@ def _apply_name_and_description(client, activity_id, hevy_workout) -> None:
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+
 def attempt_merge(
     client,
     hevy_workout: dict,
@@ -390,7 +422,13 @@ def attempt_merge(
         return MergeResult(merged=False, fallback_reason="Circuit breaker: too many PUT failures")
 
     # Find matching activity
-    match = find_matching_garmin_activity(client, hevy_workout, overlap_threshold=overlap_threshold, max_drift_minutes=max_drift_minutes, activity_types=activity_types)
+    match = find_matching_garmin_activity(
+        client,
+        hevy_workout,
+        overlap_threshold=overlap_threshold,
+        max_drift_minutes=max_drift_minutes,
+        activity_types=activity_types,
+    )
     if not match:
         return MergeResult(merged=False, fallback_reason="No matching Garmin activity found")
 
@@ -417,7 +455,8 @@ def attempt_merge(
         # activities) and no upload, so it stays one activity.
         logger.info(
             "  Match %s recorded by %s; enriching its description (watch_strategy=describe)",
-            activity_id, manufacturer,
+            activity_id,
+            manufacturer,
         )
         try:
             _apply_name_and_description(client, activity_id, hevy_workout)
@@ -430,7 +469,8 @@ def attempt_merge(
         # workout shows up exactly once with named exercises.
         logger.info(
             "  Match %s recorded by %s; uploading a named activity and removing the watch copy (watch_strategy=replace)",
-            activity_id, manufacturer,
+            activity_id,
+            manufacturer,
         )
         return MergeResult(
             merged=False,
@@ -447,7 +487,8 @@ def attempt_merge(
         # sets/reps/weights land in the activity. One activity, no upload/delete.
         logger.info(
             "  Match %s recorded by %s; merging sets in place, names may show as Unknown (watch_strategy=merge)",
-            activity_id, manufacturer,
+            activity_id,
+            manufacturer,
         )
 
     # Backup existing exercise sets
@@ -479,14 +520,20 @@ def attempt_merge(
         if _is_subcategory_rejection(e):
             logger.warning(
                 "  exerciseSets rejected a subcategory for activity %s (%s); "
-                "retrying, stripping only the offending exercise name(s)", activity_id, e,
+                "retrying, stripping only the offending exercise name(s)",
+                activity_id,
+                e,
             )
             try:
                 _push_stripping_offenders(client, activity_id, payload)
                 _consecutive_failures = 0
             except Exception as e2:
                 _consecutive_failures += 1
-                logger.error("PUT exerciseSets failed for activity %s even without names: %s", activity_id, e2)
+                logger.error(
+                    "PUT exerciseSets failed for activity %s even without names: %s",
+                    activity_id,
+                    e2,
+                )
                 return MergeResult(merged=False, fallback_reason=f"PUT failed: {e2}")
         else:
             _consecutive_failures += 1

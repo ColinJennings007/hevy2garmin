@@ -9,17 +9,19 @@ serverless restarts. Reset to the base window after a clean login.
 All functions take a ``db`` (a Database instance exposing ``get_app_config`` /
 ``set_app_config``) and are best-effort: a storage failure never raises.
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 from hevy2garmin._isotime import parse_iso
 
 logger = logging.getLogger("hevy2garmin")
 
 _KEY = "garmin_ratelimit"
-_BASE_SECONDS = 2 * 3600      # first hit: 2 hours
-_MAX_SECONDS = 24 * 3600      # cap at 24 hours
+_BASE_SECONDS = 2 * 3600  # first hit: 2 hours
+_MAX_SECONDS = 24 * 3600  # cap at 24 hours
 
 
 def _now() -> datetime:
