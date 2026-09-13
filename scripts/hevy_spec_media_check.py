@@ -9,6 +9,7 @@ silence.
     python3 scripts/hevy_spec_media_check.py                 # live spec
     python3 scripts/hevy_spec_media_check.py path/to.json    # a saved spec, for tests
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ import sys
 import urllib.request
 
 SPEC_URL = "https://api.hevyapp.com/docs.json"
-MEDIA = re.compile(r"^[a-z_]*(image|photo|media|picture|attachment)[a-z_]*$", re.I)
+MEDIA = re.compile(r"^[a-z_]*(image|photo|media|picture|attachment)[a-z_]*$", re.IGNORECASE)
 
 
 def load(source: str | None) -> dict:
@@ -47,7 +48,7 @@ def media_keys(node, path: str = "", found: set[str] | None = None) -> set[str]:
 def main() -> int:
     try:
         spec = load(sys.argv[1] if len(sys.argv) > 1 else None)
-    except Exception as e:  # noqa: BLE001 - the whole point is to report any failure
+    except Exception as e:
         print(f"spec unavailable: {e}", file=sys.stderr)
         return 2
     keys = sorted(media_keys(spec))

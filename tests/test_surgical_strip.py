@@ -3,13 +3,14 @@
 Regression guard: one exercise Garmin rejects used to blank EVERY exercise name in
 the merged activity. Now only the offending name is stripped; the rest are kept.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from hevy2garmin import merge  # noqa: E402
+from hevy2garmin import merge
 
 
 def _payload(exercises):
@@ -31,12 +32,14 @@ def _accepted_names(payload):
 
 
 def test_single_offender_keeps_the_other_names():
-    payload = _payload([
-        ("BENCH_PRESS", "BARBELL_BENCH_PRESS"),
-        ("SHOULDER_PRESS", "BAD_SHOULDER_NAME"),   # the one Garmin rejects
-        ("CURL", "BARBELL_BICEPS_CURL"),
-        ("TRICEPS_EXTENSION", "CABLE_KICKBACK"),
-    ])
+    payload = _payload(
+        [
+            ("BENCH_PRESS", "BARBELL_BENCH_PRESS"),
+            ("SHOULDER_PRESS", "BAD_SHOULDER_NAME"),  # the one Garmin rejects
+            ("CURL", "BARBELL_BICEPS_CURL"),
+            ("TRICEPS_EXTENSION", "CABLE_KICKBACK"),
+        ]
+    )
     offender = ("SHOULDER_PRESS", "BAD_SHOULDER_NAME")
     accepted = {}
 
@@ -51,19 +54,21 @@ def test_single_offender_keeps_the_other_names():
         merge._push_stripping_offenders(None, 123, payload)
 
     names = _accepted_names(accepted["payload"])
-    assert names["SHOULDER_PRESS"] is None                  # offender stripped
-    assert names["BENCH_PRESS"] == "BARBELL_BENCH_PRESS"    # kept
-    assert names["CURL"] == "BARBELL_BICEPS_CURL"           # kept
-    assert names["TRICEPS_EXTENSION"] == "CABLE_KICKBACK"   # kept
+    assert names["SHOULDER_PRESS"] is None  # offender stripped
+    assert names["BENCH_PRESS"] == "BARBELL_BENCH_PRESS"  # kept
+    assert names["CURL"] == "BARBELL_BICEPS_CURL"  # kept
+    assert names["TRICEPS_EXTENSION"] == "CABLE_KICKBACK"  # kept
 
 
 def test_multiple_offenders_fall_back_to_stripping_all():
-    payload = _payload([
-        ("BENCH_PRESS", "GOOD_1"),
-        ("SHOULDER_PRESS", "BAD_1"),
-        ("CURL", "GOOD_2"),
-        ("TRICEPS_EXTENSION", "BAD_2"),
-    ])
+    payload = _payload(
+        [
+            ("BENCH_PRESS", "GOOD_1"),
+            ("SHOULDER_PRESS", "BAD_1"),
+            ("CURL", "GOOD_2"),
+            ("TRICEPS_EXTENSION", "BAD_2"),
+        ]
+    )
     bad = {("SHOULDER_PRESS", "BAD_1"), ("TRICEPS_EXTENSION", "BAD_2")}
     accepted = {}
 
