@@ -154,6 +154,10 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Lint
+        # eslint flat config (#552); `next lint` no longer exists in Next 16. Zero warnings is the gate.
+        run: npm run lint -- --max-warnings 0
+
       - name: Build
         # Routes are force-dynamic, so no real DB is touched at build time.
         env:
