@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { authEnabled, productionRuntime } from "@/lib/auth";
 import { loadGarminConnection, loadHevyConnection, type Connection } from "@/lib/connections";
 import { ConnectHevy } from "@/components/connect-hevy";
 import { ConnectGarmin } from "@/components/connect-garmin";
@@ -50,7 +51,46 @@ function StatusDot({ connected }: { connected: boolean }) {
   );
 }
 
+/* A production deploy with no password: the proxy serves only this page and the login page
+   (#550), so the connect forms would only fail. Say what to do instead. */
+function SetPasswordFirst() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold text-text">Set a password first</h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          This deployment has no dashboard password, so it serves nothing but this page.
+        </p>
+      </header>
+      <section
+        data-testid="set-password-first"
+        className="rounded-xl border border-warm/40 bg-warm/10 p-5 text-sm text-text"
+      >
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>
+            In Vercel open your project, then <strong>Settings</strong> then{" "}
+            <strong>Environment Variables</strong>.
+          </li>
+          <li>
+            Add <code className="rounded bg-surface px-1">H2G_PASSWORD</code> with a password of your
+            choice. Optionally add{" "}
+            <code className="rounded bg-surface px-1">HEVY2GARMIN_SECRET</code> (32 random characters)
+            to sign the session cookie.
+          </li>
+          <li>Redeploy, come back here and sign in. Setup continues after that.</li>
+        </ol>
+        <p className="mt-4 text-xs text-text-muted">
+          Self-hosting with Docker or <code className="rounded bg-surface px-1">next start</code>: put
+          the same variables in the environment. The README section &quot;Securing the dashboard&quot;
+          has the details.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 export default async function SetupPage() {
+  if (productionRuntime() && !authEnabled()) return <SetPasswordFirst />;
   const data = await loadSetup();
   const hevyConnected = data.hevy.connected;
   const garminConnected = data.garmin.connected;
