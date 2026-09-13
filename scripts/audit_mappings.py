@@ -84,7 +84,7 @@ def regenerate_catalog() -> None:
     if not ver:
         try:
             ver = md.version("garmin-fit-sdk")
-        except Exception:
+        except md.PackageNotFoundError:
             ver = "unknown"
     out = {
         "_provenance": {"source": "garmin-fit-sdk", "version": ver},

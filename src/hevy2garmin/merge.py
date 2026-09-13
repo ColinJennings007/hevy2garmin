@@ -62,7 +62,7 @@ def _names_applied(client, activity_id) -> bool:
     time.sleep(4)  # let Garmin process the PUT before reading back
     try:
         after = get_activity_exercise_sets(client, activity_id)
-    except Exception:
+    except Exception:  # noqa: BLE001  # unreadable sets after a push are treated as accepted
         return True
     cats = [
         e.get("category")
@@ -82,7 +82,7 @@ def _restore_sets(client, activity_id, database) -> None:
         original = (backup or {}).get("original_sets")
         if original and original.get("exerciseSets") is not None:
             push_exercise_sets(client, activity_id, original)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # best-effort Garmin step; the merge result does not depend on it
         logger.warning("Could not restore sets for %s: %s", activity_id, e)
 
 
@@ -460,7 +460,7 @@ def attempt_merge(
         )
         try:
             _apply_name_and_description(client, activity_id, hevy_workout)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # best-effort Garmin step; the merge result does not depend on it
             logger.warning("Rename/description failed for %s: %s", activity_id, e)
         return MergeResult(merged=True, activity_id=activity_id)
 
@@ -498,7 +498,7 @@ def attempt_merge(
             f"merge_backup_{activity_id}",
             {"activity_id": activity_id, "original_sets": existing_sets},
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # best-effort Garmin step; the merge result does not depend on it
         logger.warning("Could not backup exercise sets for %s: %s", activity_id, e)
         # Continue anyway — backup is best-effort
 
@@ -516,7 +516,7 @@ def attempt_merge(
     try:
         push_exercise_sets(client, activity_id, payload)
         _consecutive_failures = 0
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the rejection is recognised by its message, whatever the client raised
         if _is_subcategory_rejection(e):
             logger.warning(
                 "  exerciseSets rejected a subcategory for activity %s (%s); "
@@ -527,7 +527,7 @@ def attempt_merge(
             try:
                 _push_stripping_offenders(client, activity_id, payload)
                 _consecutive_failures = 0
-            except Exception as e2:
+            except Exception as e2:  # noqa: BLE001  # a second failure of any type parks the merge
                 _consecutive_failures += 1
                 logger.error(
                     "PUT exerciseSets failed for activity %s even without names: %s",
@@ -559,7 +559,7 @@ def attempt_merge(
     # Rename + set description
     try:
         _apply_name_and_description(client, activity_id, hevy_workout)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # best-effort Garmin step; the merge result does not depend on it
         logger.warning("Rename/description failed after merge for %s: %s", activity_id, e)
         # Non-fatal, sets were already pushed
 

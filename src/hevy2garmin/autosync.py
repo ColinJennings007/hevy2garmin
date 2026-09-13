@@ -44,7 +44,7 @@ def run_once() -> int | None:
     hevy_auth_failed = False
     try:
         result = sync(limit=10, dry_run=False, record_log=False, respect_grace=True)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the scheduler records any failure and keeps running
         from hevy2garmin.hevy import HevyAuthError
 
         if isinstance(e, HevyAuthError):
@@ -78,8 +78,8 @@ def run_once() -> int | None:
                                     ),
                                 )
                             conn.commit()
-                except Exception:
-                    pass
+                except Exception:  # either DB backend; the setting is best-effort
+                    logger.debug("could not persist auto_sync=false", exc_info=True)
             hevy_auth_failed = True
         result = {"synced": 0, "skipped": 0, "failed": 1, "error": str(e)}
     finally:
@@ -151,8 +151,8 @@ def status() -> dict[str, Any]:
                             )
                             enabled = creds.get("enabled", False)
                             interval = creds.get("interval_minutes", 120)
-        except Exception:
-            pass
+        except Exception:  # either DB backend; defaults apply when the row cannot be read
+            logger.debug("could not read auto_sync settings", exc_info=True)
 
     status_dict: dict[str, Any] = {
         "enabled": enabled,

@@ -99,12 +99,12 @@ class SQLiteDatabase(Database):
         # Migration: add hevy_updated_at if missing
         try:
             conn.execute("ALTER TABLE synced_workouts ADD COLUMN hevy_updated_at TEXT")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
         # Migration: add sync_method column (merge mode)
         try:
             conn.execute("ALTER TABLE synced_workouts ADD COLUMN sync_method TEXT DEFAULT 'upload'")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
         for column, definition in (
             ("resolution_reason", "TEXT"),
@@ -145,7 +145,7 @@ class SQLiteDatabase(Database):
         # Migration: add content_hash to routine tables created before it existed.
         try:
             conn.execute("ALTER TABLE synced_routines ADD COLUMN content_hash TEXT")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
         conn.commit()
         return conn

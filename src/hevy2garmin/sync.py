@@ -46,7 +46,7 @@ try:  # rate-limit HR fetches like other Garmin data calls
     from garmin_auth import RateLimiter
 
     _hr_limiter = RateLimiter(delay=1.0)
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     _hr_limiter = None
 
 logger = logging.getLogger("hevy2garmin")
@@ -147,7 +147,7 @@ def finalize_pending(store, client, pending: dict) -> SyncOneResult:
             else:
                 try:
                     delete_activity(client, int(watch_id))
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001  # any failure of the delete is recorded and retried, never fatal
                     attempts = int(pending.get("delete_attempt_count") or 0) + 1
                     phase = "needs_review" if attempts >= 3 else "finalizing"
                     store.update_pending(
@@ -181,7 +181,7 @@ def finalize_pending(store, client, pending: dict) -> SyncOneResult:
             calories=payload.get("calories"),
             avg_hr=payload.get("avg_hr"),
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # the workout is parked with the error, whatever raised it
         store.update_pending(wid, phase="finalizing", next_step=step, last_error=str(exc)[:1000])
         return SyncOneResult(status="processing", activity_id=activity_id)
 
@@ -211,7 +211,7 @@ def reconcile_pending(store, client, hevy_id: str) -> SyncOneResult:
                     else None
                 )
                 resolved = int(str(raw_id).strip("'\"")) if raw_id else None
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
                 continue
             if resolved and str(resolved) not in {
                 str(pending.get("watch_activity_id")),
@@ -243,7 +243,7 @@ def reconcile_pending(store, client, hevy_id: str) -> SyncOneResult:
     workout = (pending.get("payload") or {}).get("workout") or {}
     try:
         activities = activities_for_workout(client, workout)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # the workout is parked with the error, whatever raised it
         store.update_pending(hevy_id, last_error=str(exc)[:1000])
         return SyncOneResult(status="processing")
     excluded = {str(x) for x in pending.get("pre_upload_ids", [])}
@@ -635,7 +635,7 @@ def sync_one_workout(
             except GarminUploadRejected as exc:
                 merge_store.update_pending(wid, phase="failed", last_error=str(exc)[:1000])
                 return SyncOneResult(status="failed", merge_fallback=merge_fallback)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # the request may have reached Garmin; park it whatever raised
                 # The request may have reached Garmin. Park it; never resubmit automatically.
                 merge_store.update_pending(wid, phase="processing", last_error=str(exc)[:1000])
                 return SyncOneResult(status="processing", merge_fallback=merge_fallback)
@@ -843,7 +843,7 @@ def sync(
                     stats["merge_fallback"] += 1
             if one.no_hr:
                 stats["no_hr"] += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one workout must not stop the run
             logger.error("  ✗ Failed to sync %s: %s", wid, e)
             stats["failed"] += 1
 
@@ -942,7 +942,7 @@ def _reschedule_routine(
         for old_id in store.get_routine_schedule_ids(hevy_routine_id):
             try:
                 unschedule_workout(client, old_id)
-            except Exception:
+            except Exception:  # noqa: BLE001  # best-effort Garmin step
                 logger.warning("  Could not unschedule stale calendar entry %s", old_id)
     store.clear_routine_schedules(hevy_routine_id)
     for day in dates:
@@ -965,7 +965,7 @@ def _build_library_by_name(garmin_client) -> tuple[dict[str, list[dict]], list[d
     library_by_name: dict[str, list[dict]] = {}
     try:
         raw_workouts = list_workouts(garmin_client, limit=999)
-    except Exception:
+    except Exception:  # noqa: BLE001  # the Garmin client raises many types; dedup falls back to the DB
         logger.warning("Could not list Garmin workouts; falling back to DB-only dedup")
         return {}, None
     for w in raw_workouts:
@@ -1074,7 +1074,7 @@ def _sync_one_routine(
         for wid in stale_ids:
             try:
                 delete_workout(garmin_client, wid)
-            except Exception:
+            except Exception:  # noqa: BLE001  # best-effort Garmin step
                 logger.warning("  Could not delete stale/orphan workout %s", wid)
 
         workout_id = create_workout(garmin_client, payload)

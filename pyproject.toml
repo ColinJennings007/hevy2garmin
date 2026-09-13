@@ -62,11 +62,6 @@ extend-exclude = ["web", "typescript", "universal", "docs"]
 # The rules still failing when ruff arrived (#553). Each group is removed here by the PR that
 # fixes it; nothing new may join the list. Counts at 0.16.7 after `ruff format` and the safe fixes.
 ignore = [
-  "BLE001",  # 50 blind excepts: narrow or noqa with a reason (exceptions PR)
-  "S110",    # 13 try/except/pass (exceptions PR)
-  "S112",    # 1 try/except/continue (exceptions PR)
-  "TRY002",  # 3 raise Exception(...) (exceptions PR)
-  "TRY004",  # 1 type check without TypeError (exceptions PR)
   "RUF059",  # 34 unused unpacked variables (variables PR)
   "F841",    # 4 unused variables (variables PR)
   "RUF012",  # 5 mutable class defaults (variables PR)

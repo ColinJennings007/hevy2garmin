@@ -52,7 +52,7 @@ def fetch_garmin_activities(client: Garmin, count: int = 1000) -> list[dict]:
         _cache_count = count
         _cache_timestamp = _time.time()
         return activities
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the Garmin client raises many types; matching proceeds without them
         logger.warning("Could not fetch Garmin activities: %s", e)
         return []
 

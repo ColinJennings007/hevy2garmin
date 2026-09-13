@@ -47,7 +47,7 @@ def test_single_offender_keeps_the_other_names():
         for s in p["exerciseSets"]:
             for ex in s["exercises"]:
                 if (ex["category"], ex["name"]) == offender:  # still named → rejected
-                    raise Exception("HTTP 400: Invalid Sub-Category Passed in the request")
+                    raise RuntimeError("HTTP 400: Invalid Sub-Category Passed in the request")
         accepted["payload"] = p  # this one landed
 
     with patch.object(merge, "push_exercise_sets", side_effect=fake_push):
@@ -76,7 +76,7 @@ def test_multiple_offenders_fall_back_to_stripping_all():
         for s in p["exerciseSets"]:
             for ex in s["exercises"]:
                 if (ex["category"], ex["name"]) in bad:
-                    raise Exception("Invalid Sub-Category")
+                    raise RuntimeError("Invalid Sub-Category")
         accepted["payload"] = p
 
     with patch.object(merge, "push_exercise_sets", side_effect=fake_push):
@@ -94,7 +94,7 @@ def test_single_exercise_strips_that_one():
     def fake_push(client, aid, p):
         ex = p["exerciseSets"][0]["exercises"][0]
         if ex["name"] == "BAD":
-            raise Exception("invalid sub-category")
+            raise RuntimeError("invalid sub-category")
         accepted["payload"] = p
 
     with patch.object(merge, "push_exercise_sets", side_effect=fake_push):

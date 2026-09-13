@@ -48,7 +48,7 @@ def media_keys(node, path: str = "", found: set[str] | None = None) -> set[str]:
 def main() -> int:
     try:
         spec = load(sys.argv[1] if len(sys.argv) > 1 else None)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the loader can fail on the network, the file or the JSON; any of them means unavailable
         print(f"spec unavailable: {e}", file=sys.stderr)
         return 2
     keys = sorted(media_keys(spec))

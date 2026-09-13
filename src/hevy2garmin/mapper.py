@@ -18,9 +18,12 @@ FIT SDK exercise categories used:
 
 from __future__ import annotations
 
+import logging
 import re
 
 from hevy2garmin.template_map import TEMPLATE_TO_GARMIN
+
+logger = logging.getLogger("hevy2garmin")
 
 # --------------------------------------------------------------------------- #
 # Mapping: Hevy exercise name  ->  (FIT exercise category, subcategory)
@@ -733,8 +736,8 @@ def _ensure_custom_loaded() -> None:
                 for name, (cat, subcat) in _db.get_custom_mappings().items():
                     _custom_mappings[name] = (cat, subcat)
                 return
-    except Exception:
-        pass
+    except Exception:  # either DB backend; the file cache applies when the DB cannot be read
+        logger.debug("could not load custom mappings from the database", exc_info=True)
 
     # Fallback: filesystem (local/Docker)
     import json
@@ -769,8 +772,8 @@ def save_custom_mapping(hevy_name: str, category: int, subcategory: int) -> None
                 _db.save_custom_mapping(hevy_name, category, subcategory)
                 _custom_mappings[hevy_name] = (category, subcategory)
                 return
-    except Exception:
-        pass
+    except Exception:  # either DB backend; the file cache applies when the DB cannot be written
+        logger.debug("could not save the custom mapping to the database", exc_info=True)
 
     # Local/Docker: filesystem
     import json

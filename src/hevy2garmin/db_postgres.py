@@ -35,11 +35,11 @@ class PostgresDatabase(Database):
             try:
                 self._conn_cache.cursor().execute("SELECT 1")
                 return self._conn_cache
-            except Exception:
+            except psycopg2.Error:
                 try:
                     self._conn_cache.close()
-                except Exception:
-                    pass
+                except psycopg2.Error:
+                    pass  # the connection is being discarded anyway
                 self._conn_cache = None
 
         conn = psycopg2.connect(self.database_url, cursor_factory=RealDictCursor)

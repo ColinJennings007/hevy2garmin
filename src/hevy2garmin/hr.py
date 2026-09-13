@@ -118,7 +118,7 @@ def fetch_watch_hr(garmin_client, workout: dict, limiter=None) -> list[dict]:
         date_str = str(w_start)[:10]
         call = limiter.call if limiter is not None else (lambda f, *a: f(*a))
         daily_hr = call(garmin_client.get_heart_rates, date_str)
-    except Exception as e:  # pragma: no cover - network/auth failure path
+    except Exception as e:  # noqa: BLE001  # pragma: no cover - network/auth failure path
         logger.debug("watch HR fetch failed: %s", e)
         return []
 
@@ -202,7 +202,7 @@ def fetch_activity_hr(
             fit_file = FitFile.from_bytes(fit_bytes, check_crc=False)
         finally:
             fit_logger.setLevel(previous_level)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # download and FIT parsing both fail in many ways; no HR is the outcome
         logger.warning("activity %s: HR download/parse failed: %s", activity_id, exc)
         return []
 
