@@ -92,6 +92,31 @@ jobs:
       - name: Test
         run: npm test
 
+  check-universal:
+    # The Expo app was in no job at all (#551): tsc failed on a fresh checkout and nothing ran
+    # its tests. `expo lint` is not used here on purpose: it rewrites package.json, the lockfile
+    # and writes an eslint config before reporting, so a CI run would dirty the tree.
+    name: Tests (Universal)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: universal
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install exactly from the lockfile
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
   check-web:
     name: Tests (Web)
     runs-on: ubuntu-latest
