@@ -56,9 +56,82 @@ describe("proxy: /api/cron is public so the route's own CRON_SECRET check runs (
     expect(passedThrough(await proxy(req("/api/session-epoch")))).toBe(true);
   });
 
-  it("with auth disabled everything is open, including /api/settings", async () => {
+  it("with auth disabled outside production everything is open, including /api/settings", async () => {
     delete process.env.H2G_PASSWORD;
-    expect(passedThrough(await proxy(req("/api/settings")))).toBe(true);
+    // The check-web CI job runs with VERCEL=1 at job level; this case is about development.
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("NODE_ENV", "test");
+    try {
+      expect(passedThrough(await proxy(req("/api/settings")))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+// The README's promise (Securing the dashboard): without H2G_PASSWORD the app refuses to serve
+// anything but the setup page, so a public URL is never open by accident (#550). Production is
+// what a forker's Vercel deploy runs; a local `next dev` without a password stays open.
+describe("proxy: production without a password serves only the setup and login pages (#550)", () => {
+  beforeEach(() => {
+    delete process.env.H2G_PASSWORD;
+    delete process.env.H2G_PASSWORD_HASH;
+    delete process.env.H2G_SECRET;
+    delete process.env.HEVY2GARMIN_SECRET;
+    process.env.VERCEL = "1";
+  });
+  afterEach(() => {
+    delete process.env.VERCEL;
+    vi.unstubAllEnvs();
+  });
+
+  it("a page is redirected to /setup with 307", async () => {
+    const res = await proxy(req("/dashboard"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://h/setup");
+  });
+
+  it("an API route answers 401 JSON that names the missing variable", async () => {
+    const res = await proxy(req("/api/settings"));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain("H2G_PASSWORD");
+  });
+
+  it("a mutating API call is refused the same way", async () => {
+    const res = await proxy(req("/api/settings", {}, "POST"));
+    expect(res.status).toBe(401);
+  });
+
+  it("the setup and login pages, login/logout/epoch and cron stay served", async () => {
+    expect(passedThrough(await proxy(req("/setup")))).toBe(true);
+    expect(passedThrough(await proxy(req("/login")))).toBe(true);
+    expect(passedThrough(await proxy(req("/api/login", {}, "POST")))).toBe(true);
+    expect(passedThrough(await proxy(req("/api/logout", {}, "POST")))).toBe(true);
+    expect(passedThrough(await proxy(req("/api/session-epoch")))).toBe(true);
+    expect(passedThrough(await proxy(req("/api/cron/sync", { authorization: "Bearer x" })))).toBe(true);
+  });
+
+  it("NODE_ENV=production without VERCEL is production too", async () => {
+    delete process.env.VERCEL;
+    vi.stubEnv("NODE_ENV", "production");
+    expect((await proxy(req("/dashboard"))).status).toBe(307);
+    expect((await proxy(req("/api/settings"))).status).toBe(401);
+  });
+
+  it("a password hash alone counts as configured", async () => {
+    process.env.H2G_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$abc$def";
+    const res = await proxy(req("/dashboard"));
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.headers.get("location")).toBe("http://h/login?next=%2Fdashboard");
+  });
+
+  it("the demo refusal still comes first for a mutating call", async () => {
+    process.env.DEMO_MODE = "true";
+    const res = await proxy(req("/api/settings", {}, "POST"));
+    expect(res.status).toBe(403);
   });
 });
 

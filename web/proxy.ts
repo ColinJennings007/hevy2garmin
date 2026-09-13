@@ -93,6 +93,31 @@ function authEnabled(): boolean {
   return Boolean(process.env.HEVY2GARMIN_SECRET || process.env.H2G_SECRET || process.env.H2G_PASSWORD || process.env.H2G_PASSWORD_HASH);
 }
 
+/* Production is what a forker's Vercel deploy runs (mirrors lib/auth.ts productionRuntime;
+   inlined for the same bundler reason as everything else in this file). */
+function productionRuntime(): boolean {
+  return Boolean(process.env.VERCEL) || process.env.NODE_ENV === "production";
+}
+
+/* The README's promise (Securing the dashboard, #550): without H2G_PASSWORD the app refuses to
+   serve anything but the setup page, so a public URL is never open by accident. These are the
+   only paths a production deploy answers while no password or secret is configured. /api/cron
+   carries its own bearer check (#473). */
+const UNCONFIGURED_PATHS = ["/setup", "/login", "/api/login", "/api/logout", "/api/session-epoch", "/api/cron"];
+function unconfiguredRefusal(req: NextRequest): NextResponse {
+  const { pathname } = req.nextUrl;
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { ok: false, error: "Auth is not configured: set H2G_PASSWORD (or H2G_PASSWORD_HASH) and redeploy" },
+      { status: 401 },
+    );
+  }
+  const url = req.nextUrl.clone();
+  url.pathname = "/setup";
+  url.search = "";
+  return NextResponse.redirect(url, 307);
+}
+
 /* The "sign out everywhere" epoch, read from the public /api/session-epoch and
    cached in module scope for a few seconds so it is not fetched per request.
    On any failure we keep the last-known value (or 0), so a transient blip never
@@ -138,7 +163,8 @@ function demoRefusal(): NextResponse {
 }
 
 /** Gate every page + API route behind the shared-password session (mirrors auth.py).
-    When no secret/password is set, auth is disabled and everything is open. */
+    When no secret/password is set: open in development, but a production deploy serves only
+    the setup and login pages until one is configured (#550). */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (STATIC_PREFIX.test(pathname)) return NextResponse.next();
@@ -151,7 +177,13 @@ export async function proxy(req: NextRequest) {
   ) {
     return demoRefusal();
   }
-  if (!authEnabled()) return NextResponse.next();
+  if (!authEnabled()) {
+    if (!productionRuntime()) return NextResponse.next();
+    if (UNCONFIGURED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+      return NextResponse.next();
+    }
+    return unconfiguredRefusal(req);
+  }
   // Let the epoch endpoint through BEFORE reading the epoch, or currentEpoch()
   // (which fetches it) would recurse into the proxy forever.
   if (pathname === "/api/session-epoch") return NextResponse.next();
