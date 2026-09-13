@@ -39,8 +39,12 @@ jobs:
       - name: requirements.txt matches pyproject's dependencies
         # requirements.txt says CI asserts it; this is the assertion (#554).
         run: |
+          python -m pip install -q 'tomli; python_version < "3.11"'
           python - <<'PY'
-          import tomllib
+          try:
+              import tomllib
+          except ModuleNotFoundError:  # Python 3.10 in the matrix
+              import tomli as tomllib
           want = sorted(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"])
           have = sorted(l.strip() for l in open("requirements.txt") if l.strip() and not l.startswith("#"))
           assert want == have, f"pyproject: {want}\nrequirements.txt: {have}"
