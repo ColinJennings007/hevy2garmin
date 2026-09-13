@@ -36,6 +36,17 @@ jobs:
       - name: Exercise map drift (TypeScript copy matches the Python source of truth)
         run: python scripts/gen_typescript_map.py --check
 
+      - name: requirements.txt matches pyproject's dependencies
+        # requirements.txt says CI asserts it; this is the assertion (#554).
+        run: |
+          python - <<'PY'
+          import tomllib
+          want = sorted(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"])
+          have = sorted(l.strip() for l in open("requirements.txt") if l.strip() and not l.startswith("#"))
+          assert want == have, f"pyproject: {want}\nrequirements.txt: {have}"
+          print("requirements.txt matches", len(want), "dependencies")
+          PY
+
   check-postgres:
     name: Tests (Postgres)
     runs-on: ubuntu-latest
@@ -208,9 +219,12 @@ jobs:
           DATABASE_URL: postgres://ci:ci@localhost:5432/ci
         run: npm run build
 
-      - name: Boot with a bare environment and answer on /login
+      - name: Boot the standalone server with a bare environment and answer on /login
+        # next.config.ts builds `output: standalone` off Vercel, and Next warns that `next start`
+        # does not serve a standalone build, so the server a self-hoster runs was never the one
+        # exercised here (#554). This boots the built server the way a Docker image does.
         run: |
-          env -i PATH="$PATH" HOME="$HOME" DATABASE_URL=postgres://ci:ci@localhost:5432/ci npx next start --port 8097 > start.log 2>&1 &
+          env -i PATH="$PATH" HOME="$HOME" DATABASE_URL=postgres://ci:ci@localhost:5432/ci PORT=8097 HOSTNAME=127.0.0.1 node .next/standalone/server.js > start.log 2>&1 &
           for i in $(seq 1 30); do
             sleep 1
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8097/login || true)
