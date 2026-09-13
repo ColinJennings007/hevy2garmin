@@ -75,18 +75,26 @@ def load_config() -> dict[str, Any]:
 
     # Load credentials + settings from DB in one connection (cloud deployments)
     from hevy2garmin.db import get_database_url
+
     database_url = get_database_url()
     if database_url:
         try:
             from hevy2garmin.db import get_db
+
             _db = get_db()
-            if hasattr(_db, '_get_conn'):
+            if hasattr(_db, "_get_conn"):
                 with _db._get_conn() as conn:
                     with conn.cursor() as cur:
                         # Credentials
-                        cur.execute("SELECT platform, credentials FROM platform_credentials WHERE platform IN ('hevy', 'garmin')")
+                        cur.execute(
+                            "SELECT platform, credentials FROM platform_credentials WHERE platform IN ('hevy', 'garmin')"
+                        )
                         for row in cur.fetchall():
-                            creds = row["credentials"] if isinstance(row["credentials"], dict) else json.loads(row["credentials"])
+                            creds = (
+                                row["credentials"]
+                                if isinstance(row["credentials"], dict)
+                                else json.loads(row["credentials"])
+                            )
                             if row["platform"] == "hevy" and creds.get("api_key"):
                                 config["hevy_api_key"] = creds["api_key"]
                             elif row["platform"] == "garmin":
@@ -95,9 +103,15 @@ def load_config() -> dict[str, Any]:
                                 if creds.get("password"):
                                     config["garmin_password"] = creds["password"]
                         # App settings
-                        cur.execute("SELECT key, value FROM app_cache WHERE key IN ('user_profile', 'timing', 'hr_fusion', 'merge_settings')")
+                        cur.execute(
+                            "SELECT key, value FROM app_cache WHERE key IN ('user_profile', 'timing', 'hr_fusion', 'merge_settings')"
+                        )
                         for row in cur.fetchall():
-                            val = row["value"] if isinstance(row["value"], dict) else json.loads(row["value"])
+                            val = (
+                                row["value"]
+                                if isinstance(row["value"], dict)
+                                else json.loads(row["value"])
+                            )
                             if row["key"] == "merge_settings":
                                 # Unpack merge_settings into top-level keys
                                 for mk, mv in val.items():
@@ -174,18 +188,20 @@ def is_configured() -> bool:
     On Vercel (DATABASE_URL set): requires both API key AND Garmin tokens in DB.
     Locally: just checks for API key (tokens are file-based).
     """
-    import os
+
     config = load_config()
     if not config.get("hevy_api_key"):
         return False
     # On cloud deployments, check that Garmin setup started (either credentials
     # saved from setup form, or tokens from browser-based auth, or hevy key in DB)
     from hevy2garmin.db import get_database_url
+
     if get_database_url():
         try:
             from hevy2garmin.db import get_db
+
             _db = get_db()
-            if not hasattr(_db, '_get_conn'):
+            if not hasattr(_db, "_get_conn"):
                 return True  # SQLite fallback
             with _db._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -215,14 +231,17 @@ def get_github_pat() -> str | None:
         try:
             _db = get_db()
             if hasattr(_db, "_get_conn"):
-                with _db._get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT credentials FROM platform_credentials WHERE platform = 'github'"
-                        )
-                        row = cur.fetchone()
+                with _db._get_conn() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT credentials FROM platform_credentials WHERE platform = 'github'"
+                    )
+                    row = cur.fetchone()
                 if row is not None:
-                    creds = row["credentials"] if isinstance(row["credentials"], dict) else json.loads(row["credentials"])
+                    creds = (
+                        row["credentials"]
+                        if isinstance(row["credentials"], dict)
+                        else json.loads(row["credentials"])
+                    )
                     pat = (creds or {}).get("pat")
                     if pat and pat.strip():
                         return pat.strip()

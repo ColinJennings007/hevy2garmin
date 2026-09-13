@@ -1,5 +1,7 @@
 """Language-independent mapping via Hevy exercise_template_id (#173)."""
+
 from __future__ import annotations
+
 import hevy2garmin.mapper as m
 from hevy2garmin.mapper import lookup_exercise
 from hevy2garmin.template_map import TEMPLATE_TO_GARMIN
