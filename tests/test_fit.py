@@ -16,9 +16,7 @@ class TestFITGeneration:
         self, sample_workout: dict, sample_profile: dict, tmp_path: Path
     ) -> None:
         path = str(tmp_path / "test.fit")
-        result = generate_fit(
-            sample_workout, hr_samples=None, output_path=path, profile=sample_profile
-        )
+        generate_fit(sample_workout, hr_samples=None, output_path=path, profile=sample_profile)
         assert os.path.exists(path)
         assert os.path.getsize(path) > 0
 

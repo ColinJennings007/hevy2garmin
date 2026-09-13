@@ -83,43 +83,42 @@ def load_config() -> dict[str, Any]:
 
             _db = get_db()
             if hasattr(_db, "_get_conn"):
-                with _db._get_conn() as conn:
-                    with conn.cursor() as cur:
-                        # Credentials
-                        cur.execute(
-                            "SELECT platform, credentials FROM platform_credentials WHERE platform IN ('hevy', 'garmin')"
+                with _db._get_conn() as conn, conn.cursor() as cur:
+                    # Credentials
+                    cur.execute(
+                        "SELECT platform, credentials FROM platform_credentials WHERE platform IN ('hevy', 'garmin')"
+                    )
+                    for row in cur.fetchall():
+                        creds = (
+                            row["credentials"]
+                            if isinstance(row["credentials"], dict)
+                            else json.loads(row["credentials"])
                         )
-                        for row in cur.fetchall():
-                            creds = (
-                                row["credentials"]
-                                if isinstance(row["credentials"], dict)
-                                else json.loads(row["credentials"])
-                            )
-                            if row["platform"] == "hevy" and creds.get("api_key"):
-                                config["hevy_api_key"] = creds["api_key"]
-                            elif row["platform"] == "garmin":
-                                if creds.get("email"):
-                                    config["garmin_email"] = creds["email"]
-                                if creds.get("password"):
-                                    config["garmin_password"] = creds["password"]
-                        # App settings
-                        cur.execute(
-                            "SELECT key, value FROM app_cache WHERE key IN ('user_profile', 'timing', 'hr_fusion', 'merge_settings')"
+                        if row["platform"] == "hevy" and creds.get("api_key"):
+                            config["hevy_api_key"] = creds["api_key"]
+                        elif row["platform"] == "garmin":
+                            if creds.get("email"):
+                                config["garmin_email"] = creds["email"]
+                            if creds.get("password"):
+                                config["garmin_password"] = creds["password"]
+                    # App settings
+                    cur.execute(
+                        "SELECT key, value FROM app_cache WHERE key IN ('user_profile', 'timing', 'hr_fusion', 'merge_settings')"
+                    )
+                    for row in cur.fetchall():
+                        val = (
+                            row["value"]
+                            if isinstance(row["value"], dict)
+                            else json.loads(row["value"])
                         )
-                        for row in cur.fetchall():
-                            val = (
-                                row["value"]
-                                if isinstance(row["value"], dict)
-                                else json.loads(row["value"])
-                            )
-                            if row["key"] == "merge_settings":
-                                # Unpack merge_settings into top-level keys
-                                for mk, mv in val.items():
-                                    config[mk] = mv
-                            elif row["key"] in config and isinstance(config[row["key"]], dict):
-                                config[row["key"]].update(val)
-                            else:
-                                config[row["key"]] = val
+                        if row["key"] == "merge_settings":
+                            # Unpack merge_settings into top-level keys
+                            for mk, mv in val.items():
+                                config[mk] = mv
+                        elif row["key"] in config and isinstance(config[row["key"]], dict):
+                            config[row["key"]].update(val)
+                        else:
+                            config[row["key"]] = val
         except Exception:  # either DB backend; file config applies when the rows cannot be read
             logger.debug("could not read config rows from the database", exc_info=True)
 
@@ -203,13 +202,12 @@ def is_configured() -> bool:
             _db = get_db()
             if not hasattr(_db, "_get_conn"):
                 return True  # SQLite fallback
-            with _db._get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT 1 FROM platform_credentials WHERE platform IN ('garmin', 'garmin_tokens', 'hevy') LIMIT 1"
-                    )
-                    if cur.fetchone() is None:
-                        return False
+            with _db._get_conn() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM platform_credentials WHERE platform IN ('garmin', 'garmin_tokens', 'hevy') LIMIT 1"
+                )
+                if cur.fetchone() is None:
+                    return False
         except Exception:  # either DB backend; an unreadable table is not "not configured"
             logger.debug("could not check platform_credentials", exc_info=True)
     return True

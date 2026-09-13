@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from hevy2garmin.merge import (
@@ -686,7 +687,7 @@ class TestNamesApplied:
 class TestSyncIntegration:
     """Test merge mode wired into sync.py."""
 
-    WORKOUTS = [
+    WORKOUTS: ClassVar = [
         {
             "id": "w1",
             "title": "Push",
@@ -758,12 +759,12 @@ class TestSyncIntegration:
     def test_merge_on_second_falls_back(self, *mocks):
         """merge ON, first matches, second doesn't → fallback to upload."""
         (
-            mock_desc,
-            mock_setdesc,
-            mock_rename,
-            mock_find,
-            mock_upload,
-            mock_fit,
+            _mock_desc,
+            _mock_setdesc,
+            _mock_rename,
+            _mock_find,
+            _mock_upload,
+            _mock_fit,
             mock_merge,
             mock_hevy_cls,
             mock_gclient,
@@ -811,12 +812,12 @@ class TestSyncIntegration:
     def test_merge_off_normal_upload(self, *mocks):
         """merge OFF → normal upload, merge never attempted."""
         (
-            mock_desc,
-            mock_setdesc,
-            mock_rename,
-            mock_find,
-            mock_upload,
-            mock_fit,
+            _mock_desc,
+            _mock_setdesc,
+            _mock_rename,
+            _mock_find,
+            _mock_upload,
+            _mock_fit,
             mock_merge,
             mock_hevy_cls,
             mock_gclient,

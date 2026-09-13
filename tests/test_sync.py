@@ -289,7 +289,7 @@ class TestSync:
         with (
             patch("hevy2garmin.sync.HevyClient") as MockHevy,
             patch("hevy2garmin.sync.db") as mock_db,
-            patch("hevy2garmin.sync.get_client") as mock_garmin_client,
+            patch("hevy2garmin.sync.get_client"),
             patch("hevy2garmin.sync.upload_fit") as mock_upload,
             patch("hevy2garmin.sync.rename_activity"),
             patch("hevy2garmin.sync.set_description"),
@@ -565,12 +565,12 @@ class TestSyncOneWorkout:
 @patch("hevy2garmin.hr.hr_for_sync")
 def test_hr_empty_retries_once_then_counts_no_hr(mock_hr, *rest):
     (
-        mock_desc,
-        mock_setdesc,
-        mock_rename,
-        mock_find,
-        mock_upload,
-        mock_fit,
+        _mock_desc,
+        _mock_setdesc,
+        _mock_rename,
+        _mock_find,
+        _mock_upload,
+        _mock_fit,
         mock_merge,
         mock_hevy_cls,
         mock_gclient,
@@ -631,12 +631,12 @@ def test_hr_empty_retries_once_then_counts_no_hr(mock_hr, *rest):
 @patch("hevy2garmin.hr.hr_for_sync")
 def test_hr_fusion_disabled_no_retry_no_count(mock_hr, *rest):
     (
-        mock_desc,
-        mock_setdesc,
-        mock_rename,
-        mock_find,
-        mock_upload,
-        mock_fit,
+        _mock_desc,
+        _mock_setdesc,
+        _mock_rename,
+        _mock_find,
+        _mock_upload,
+        _mock_fit,
         mock_merge,
         mock_hevy_cls,
         mock_gclient,
@@ -696,12 +696,12 @@ def test_no_hr_not_counted_on_dedup_path(mock_hr, *rest):
     """When the activity already exists on Garmin (dedup, no upload), no_hr must
     NOT fire — nothing was uploaded, and the existing activity may have its own HR."""
     (
-        mock_desc,
-        mock_setdesc,
-        mock_rename,
-        mock_find,
+        _mock_desc,
+        _mock_setdesc,
+        _mock_rename,
+        _mock_find,
         mock_upload,
-        mock_fit,
+        _mock_fit,
         mock_merge,
         mock_hevy_cls,
         mock_gclient,

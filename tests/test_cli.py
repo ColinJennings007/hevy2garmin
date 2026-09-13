@@ -14,6 +14,7 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
         [sys.executable, "-m", "hevy2garmin.cli", *args],
         capture_output=True,
         text=True,
+        check=False,
         timeout=10,
     )
 

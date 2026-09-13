@@ -21,7 +21,7 @@ def test_localized_name_resolves_via_template_id():
 
 
 def test_english_name_still_resolves_without_template():
-    cat, sub, _ = lookup_exercise("Bench Press (Barbell)")
+    cat, _sub, _ = lookup_exercise("Bench Press (Barbell)")
     assert cat != 65534
 
 
@@ -30,7 +30,7 @@ def test_unknown_without_template_is_unmapped():
 
 
 def test_unknown_template_falls_back_to_name():
-    cat, sub, _ = lookup_exercise("Bench Press (Barbell)", "ZZZZZZZZ")
+    cat, _sub, _ = lookup_exercise("Bench Press (Barbell)", "ZZZZZZZZ")
     assert cat != 65534  # unknown tid ignored, name match used
 
 

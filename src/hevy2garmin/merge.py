@@ -503,7 +503,6 @@ def attempt_merge(
         # Continue anyway — backup is best-effort
 
     # Build payload
-    title = hevy_workout.get("title", "Workout")
     payload = build_exercise_sets_payload(hevy_workout, activity_id, act_start, act_duration)
 
     # PUT exercise sets. The exerciseSets PUT is atomic: a single exercise whose

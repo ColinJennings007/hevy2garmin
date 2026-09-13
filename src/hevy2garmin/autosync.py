@@ -137,20 +137,19 @@ def status() -> dict[str, Any]:
 
             _db = db.get_db()
             if hasattr(_db, "_get_conn"):
-                with _db._get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT credentials FROM platform_credentials WHERE platform = 'auto_sync' LIMIT 1"
+                with _db._get_conn() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT credentials FROM platform_credentials WHERE platform = 'auto_sync' LIMIT 1"
+                    )
+                    row = cur.fetchone()
+                    if row and row.get("credentials"):
+                        creds = (
+                            row["credentials"]
+                            if isinstance(row["credentials"], dict)
+                            else _json.loads(row["credentials"])
                         )
-                        row = cur.fetchone()
-                        if row and row.get("credentials"):
-                            creds = (
-                                row["credentials"]
-                                if isinstance(row["credentials"], dict)
-                                else _json.loads(row["credentials"])
-                            )
-                            enabled = creds.get("enabled", False)
-                            interval = creds.get("interval_minutes", 120)
+                        enabled = creds.get("enabled", False)
+                        interval = creds.get("interval_minutes", 120)
         except Exception:  # either DB backend; defaults apply when the row cannot be read
             logger.debug("could not read auto_sync settings", exc_info=True)
 

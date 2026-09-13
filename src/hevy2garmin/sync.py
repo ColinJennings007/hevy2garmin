@@ -1063,11 +1063,14 @@ def _sync_one_routine(
         # (an orphan from a crash or DB reset). Same-named entries without the marker are
         # the user's own workouts and are left untouched.
         stale_ids = set()
-        if existing and existing.get("garmin_workout_id"):
-            # A workout already flagged missing is gone from Garmin — deleting it
-            # again would only burn a rate-limited 404.
-            if existing.get("status") != "missing_on_garmin":
-                stale_ids.add(str(existing["garmin_workout_id"]))
+        # A workout already flagged missing is gone from Garmin: deleting it again would only
+        # burn a rate-limited 404.
+        if (
+            existing
+            and existing.get("garmin_workout_id")
+            and existing.get("status") != "missing_on_garmin"
+        ):
+            stale_ids.add(str(existing["garmin_workout_id"]))
         for entry in library_by_name.get(payload["workoutName"], []):
             if ROUTINE_DESC_MARKER in entry["description"]:
                 stale_ids.add(entry["id"])
@@ -1093,7 +1096,7 @@ def _sync_one_routine(
         if schedule_date:
             dates_to_book = [schedule_date]
         else:
-            today = _date.today().isoformat()
+            today = datetime.now(tz=timezone.utc).astimezone().date().isoformat()
             prior_dates = store.get_routine_scheduled_dates(rid)
             if not prior_dates and (existing or {}).get("scheduled_date"):
                 prior_dates = [existing["scheduled_date"]]
