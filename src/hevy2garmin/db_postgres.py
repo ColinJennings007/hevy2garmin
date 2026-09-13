@@ -424,13 +424,12 @@ class PostgresDatabase(Database):
         if not workouts:
             return []
         hevy_ids = [w.get("id", "") for w in workouts]
-        with self._get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT hevy_id, hevy_updated_at FROM synced_workouts WHERE hevy_id = ANY(%s) AND hevy_updated_at IS NOT NULL",
-                    (hevy_ids,),
-                )
-                stored = {r["hevy_id"]: r["hevy_updated_at"] for r in cur.fetchall()}
+        with self._get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT hevy_id, hevy_updated_at FROM synced_workouts WHERE hevy_id = ANY(%s) AND hevy_updated_at IS NOT NULL",
+                (hevy_ids,),
+            )
+            stored = {r["hevy_id"]: r["hevy_updated_at"] for r in cur.fetchall()}
         stale = []
         for w in workouts:
             wid = w.get("id", "")
@@ -658,46 +657,44 @@ class PostgresDatabase(Database):
     def get_workout_states(self, hevy_ids: list[str]) -> dict[str, dict]:
         if not hevy_ids:
             return {}
-        with self._get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT hevy_id, status, garmin_activity_id, resolution_reason, resolution_source FROM synced_workouts WHERE hevy_id = ANY(%s)",
-                    (hevy_ids,),
-                )
-                states = {
-                    row["hevy_id"]: {
-                        "kind": "terminal",
-                        "status": row["status"] or "success",
-                        "garmin_activity_id": row["garmin_activity_id"],
-                        "reason": row["resolution_reason"],
-                        "source": row["resolution_source"],
-                    }
-                    for row in cur.fetchall()
+        with self._get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT hevy_id, status, garmin_activity_id, resolution_reason, resolution_source FROM synced_workouts WHERE hevy_id = ANY(%s)",
+                (hevy_ids,),
+            )
+            states = {
+                row["hevy_id"]: {
+                    "kind": "terminal",
+                    "status": row["status"] or "success",
+                    "garmin_activity_id": row["garmin_activity_id"],
+                    "reason": row["resolution_reason"],
+                    "source": row["resolution_source"],
                 }
-                cur.execute(
-                    "SELECT hevy_id, phase, next_step, last_error, attempt_count, delete_attempt_count, garmin_activity_id FROM pending_uploads WHERE hevy_id = ANY(%s)",
-                    (hevy_ids,),
-                )
-                for row in cur.fetchall():
-                    if row["hevy_id"] not in states:
-                        states[row["hevy_id"]] = {
-                            "kind": "pending",
-                            "status": row["phase"],
-                            "next_step": row["next_step"],
-                            "last_error": row["last_error"],
-                            "attempt_count": row["attempt_count"],
-                            "delete_attempt_count": row["delete_attempt_count"],
-                            "garmin_activity_id": row["garmin_activity_id"],
-                        }
-                return states
+                for row in cur.fetchall()
+            }
+            cur.execute(
+                "SELECT hevy_id, phase, next_step, last_error, attempt_count, delete_attempt_count, garmin_activity_id FROM pending_uploads WHERE hevy_id = ANY(%s)",
+                (hevy_ids,),
+            )
+            for row in cur.fetchall():
+                if row["hevy_id"] not in states:
+                    states[row["hevy_id"]] = {
+                        "kind": "pending",
+                        "status": row["phase"],
+                        "next_step": row["next_step"],
+                        "last_error": row["last_error"],
+                        "attempt_count": row["attempt_count"],
+                        "delete_attempt_count": row["delete_attempt_count"],
+                        "garmin_activity_id": row["garmin_activity_id"],
+                    }
+            return states
 
     def get_terminal_counts(self) -> dict[str, int]:
-        with self._get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT COALESCE(status, 'success') AS status, COUNT(*) AS count FROM synced_workouts GROUP BY COALESCE(status, 'success')"
-                )
-                raw = {row["status"]: row["count"] for row in cur.fetchall()}
+        with self._get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(status, 'success') AS status, COUNT(*) AS count FROM synced_workouts GROUP BY COALESCE(status, 'success')"
+            )
+            raw = {row["status"]: row["count"] for row in cur.fetchall()}
         result = {
             "uploaded": raw.get("success", 0),
             "manual": raw.get("manual", 0),

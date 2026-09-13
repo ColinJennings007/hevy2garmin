@@ -24,7 +24,7 @@ class TestLookupBuiltIn:
         assert name == "Bench Press (Barbell)"
 
     def test_squat(self) -> None:
-        cat, subcat, name = lookup_exercise("Squat (Barbell)")
+        cat, _subcat, name = lookup_exercise("Squat (Barbell)")
         assert cat == 28
         assert name == "Squat (Barbell)"
 
@@ -35,7 +35,7 @@ class TestLookupBuiltIn:
         assert name == "Made Up Exercise 12345"
 
     def test_empty_string(self) -> None:
-        cat, subcat, name = lookup_exercise("")
+        cat, _subcat, name = lookup_exercise("")
         assert cat == _UNKNOWN_CATEGORY
         assert name == ""
 
@@ -58,15 +58,17 @@ class TestCustomMappings:
 
         m._custom_loaded = False
 
-        with patch.object(Path, "expanduser", return_value=mappings_file):
-            with patch("hevy2garmin.mapper._custom_loaded", False):
-                # Force reload
-                m._custom_loaded = False
-                m._custom_mappings.clear()
-                m._custom_mappings["Bench Press (Barbell)"] = (99, 88)
-                cat, subcat, _ = lookup_exercise("Bench Press (Barbell)")
-                assert cat == 99
-                assert subcat == 88
+        with (
+            patch.object(Path, "expanduser", return_value=mappings_file),
+            patch("hevy2garmin.mapper._custom_loaded", False),
+        ):
+            # Force reload
+            m._custom_loaded = False
+            m._custom_mappings.clear()
+            m._custom_mappings["Bench Press (Barbell)"] = (99, 88)
+            cat, subcat, _ = lookup_exercise("Bench Press (Barbell)")
+            assert cat == 99
+            assert subcat == 88
 
         # Cleanup
         m._custom_mappings.clear()
@@ -239,7 +241,7 @@ class TestValidCategories:
         from hevy2garmin.merge import _category_to_string
 
         for name in ("Cycling", "Treadmill", "Elliptical Trainer", "Rowing Machine"):
-            cat, sub, _ = lookup_exercise(name)
+            cat, _sub, _ = lookup_exercise(name)
             assert _category_to_string(cat) == "CARDIO", name
 
     def test_dumbbell_row_resolves_to_real_subcategory(self) -> None:

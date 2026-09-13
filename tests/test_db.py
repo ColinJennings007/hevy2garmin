@@ -20,9 +20,11 @@ class TestSQLiteReadOnlyFilesystem:
 
     def test_readonly_mkdir_raises_actionable_error(self, tmp_path: Path) -> None:
         db = SQLiteDatabase(tmp_path / "nope" / "sync.db")
-        with patch.object(Path, "mkdir", side_effect=OSError("read-only file system")):
-            with pytest.raises(RuntimeError, match="read-only filesystem"):
-                db._get_conn()
+        with (
+            patch.object(Path, "mkdir", side_effect=OSError("read-only file system")),
+            pytest.raises(RuntimeError, match="read-only filesystem"),
+        ):
+            db._get_conn()
 
 
 def _make_db(tmp_path):

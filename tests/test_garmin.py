@@ -365,9 +365,8 @@ def test_list_workouts_raises_on_non_list_body():
     resp = MagicMock()
     resp.json.return_value = {"error": "temporarily unavailable"}  # dict, not a list
     client.client.request.return_value = resp
-    with patch("hevy2garmin.garmin.time.sleep"):
-        with pytest.raises(TypeError, match="not a list"):
-            list_workouts(client)
+    with patch("hevy2garmin.garmin.time.sleep"), pytest.raises(TypeError, match="not a list"):
+        list_workouts(client)
 
 
 def test_list_workouts_returns_well_formed_list():

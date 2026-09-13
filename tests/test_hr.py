@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import zipfile
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -114,7 +115,7 @@ class TestFetchWatchHR:
 
 
 class TestFetchActivityHR:
-    WORKOUT = {
+    WORKOUT: ClassVar = {
         "title": "Push",
         "start_time": "2026-03-15T18:00:00+00:00",
         "end_time": "2026-03-15T18:10:00+00:00",
@@ -217,7 +218,7 @@ class TestFetchActivityHR:
 
 
 class TestHRBackup:
-    WORKOUT = {
+    WORKOUT: ClassVar = {
         "id": "w1",
         "start_time": "2026-03-15T18:00:00+00:00",
         "end_time": "2026-03-15T18:10:00+00:00",
@@ -378,7 +379,7 @@ def _hr_count_in_fit(path: str) -> int:
 
 
 class TestHREmbeddedInFit:
-    WORKOUT = {
+    WORKOUT: ClassVar = {
         "title": "Push",
         "start_time": "2026-03-15T18:00:00+00:00",
         "end_time": "2026-03-15T18:10:00+00:00",
@@ -389,7 +390,7 @@ class TestHREmbeddedInFit:
             },
         ],
     }
-    PROFILE = {"weight_kg": 78.0, "birth_year": 1994, "vo2max": 50.0}
+    PROFILE: ClassVar = {"weight_kg": 78.0, "birth_year": 1994, "vo2max": 50.0}
 
     def test_timestamped_hr_written_to_fit(self, tmp_path: Path):
         path = str(tmp_path / "w.fit")
