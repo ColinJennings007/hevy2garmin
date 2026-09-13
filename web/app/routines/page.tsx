@@ -100,12 +100,6 @@ function fmtDate(value: string | null): string {
   });
 }
 
-function fmtDay(value: string | null): string {
-  if (!value) return "—";
-  // scheduled_date is a plain YYYY-MM-DD string from Hevy; show it verbatim
-  // rather than risk a timezone shift by parsing it as a Date.
-  return value;
-}
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {
