@@ -68,7 +68,7 @@ def try_delete_icu_activity(garmin_activity_id: int, workout_start: str) -> bool
         if not isinstance(activities, list):
             logger.warning("ICU cleanup: unexpected response type %s", type(activities).__name__)
             return False
-    except (requests.RequestException, ValueError) as e:
+    except Exception as e:  # noqa: BLE001  # the cleanup never raises, whatever the HTTP layer throws (tests pin this)
         logger.warning("ICU cleanup: failed to list activities: %s", e)
         return False
 
@@ -98,6 +98,6 @@ def try_delete_icu_activity(garmin_activity_id: int, workout_start: str) -> bool
         resp.raise_for_status()
         logger.info("  ICU cleanup: deleted activity %s (garmin_id=%s)", icu_id, garmin_activity_id)
         return True
-    except requests.RequestException as e:
+    except Exception as e:  # noqa: BLE001  # the cleanup never raises, whatever the HTTP layer throws (tests pin this)
         logger.warning("ICU cleanup: failed to delete activity %s: %s", icu_id, e)
         return False
