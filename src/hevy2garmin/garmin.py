@@ -254,7 +254,7 @@ def find_activity_by_start_time(
 
     try:
         activities = _limiter.call(client.get_activities_by_date, date_from, date_to)
-    except Exception:
+    except Exception:  # noqa: BLE001  # the Garmin client raises many types; a failed lookup is "unknown"
         return None
 
     excluded = {str(activity_id) for activity_id in (exclude_activity_ids or [])}
@@ -354,7 +354,7 @@ def find_matching_garmin_activity(
     search_end = (hevy_end + timedelta(hours=2)).date().isoformat()
     try:
         activities = _limiter.call(client.get_activities_by_date, search_start, search_end)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the Garmin client raises many types; merge falls back
         logger.warning("Could not query Garmin activities for merge: %s", e)
         return None
 
@@ -492,7 +492,7 @@ def list_workouts(client: Garmin, limit: int = 100) -> list[dict]:
     )
     data = resp.json() if hasattr(resp, "json") else resp
     if not isinstance(data, list):
-        raise RuntimeError(
+        raise TypeError(
             f"Garmin workout listing returned a {type(data).__name__}, not a list; "
             "treating as unknown rather than empty"
         )
@@ -525,7 +525,7 @@ def schedule_workout(client: Garmin, workout_id: int | str, date: str) -> int | 
     try:
         data = resp.json() if hasattr(resp, "json") else resp
         return data.get("workoutScheduleId") if isinstance(data, dict) else None
-    except Exception:
+    except Exception:  # noqa: BLE001  # a malformed response body is "no schedule id"
         return None
 
 
@@ -552,8 +552,8 @@ def generate_description(
             t0 = parse_iso(start)
             t1 = parse_iso(end)
             duration_s = int((t1 - t0).total_seconds())
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            pass  # unparseable timestamps: the duration stays unknown
 
     lines.append(f"🏋️ {title}")
     if duration_s > 0:

@@ -95,7 +95,7 @@ class HevyClient:
         """
         try:
             data = self._get(f"/workouts/{workout_id}")
-        except Exception:
+        except Exception:  # noqa: BLE001  # auth, HTTP and JSON failures all mean "not available"
             return None
         if isinstance(data, dict):
             if "id" in data:

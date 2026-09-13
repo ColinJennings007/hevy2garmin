@@ -34,7 +34,7 @@ def record_rate_limit(db) -> int:
     length in seconds."""
     try:
         prev = db.get_app_config(_KEY) or {}
-    except Exception:
+    except Exception:  # noqa: BLE001  # either DB backend; no state means no hits yet
         prev = {}
     hits = int(prev.get("hits", 0)) + 1
     seconds = min(_BASE_SECONDS * (2 ** (hits - 1)), _MAX_SECONDS)
@@ -51,13 +51,13 @@ def cooldown_remaining(db) -> int:
     """Seconds remaining in the cooldown, or 0 if not currently cooling down."""
     try:
         state = db.get_app_config(_KEY)
-    except Exception:
+    except Exception:  # noqa: BLE001  # either DB backend; no readable state means no cooldown
         return 0
     if not state or not state.get("until"):
         return 0
     try:
         until = parse_iso(state["until"])
-    except Exception:
+    except (ValueError, TypeError, KeyError):
         return 0
     remaining = (until - _now()).total_seconds()
     return int(remaining) if remaining > 0 else 0

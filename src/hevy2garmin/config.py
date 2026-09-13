@@ -120,8 +120,8 @@ def load_config() -> dict[str, Any]:
                                 config[row["key"]].update(val)
                             else:
                                 config[row["key"]] = val
-        except Exception:
-            pass
+        except Exception:  # either DB backend; file config applies when the rows cannot be read
+            logger.debug("could not read config rows from the database", exc_info=True)
 
     # Environment variables fill gaps (DB credentials take precedence since user may
     # have changed them via the setup/settings UI after initial deploy)
@@ -210,8 +210,8 @@ def is_configured() -> bool:
                     )
                     if cur.fetchone() is None:
                         return False
-        except Exception:
-            pass
+        except Exception:  # either DB backend; an unreadable table is not "not configured"
+            logger.debug("could not check platform_credentials", exc_info=True)
     return True
 
 
@@ -245,8 +245,8 @@ def get_github_pat() -> str | None:
                     pat = (creds or {}).get("pat")
                     if pat and pat.strip():
                         return pat.strip()
-        except Exception:
-            pass
+        except Exception:  # either DB backend; the env var applies when the row cannot be read
+            logger.debug("could not read the GitHub PAT row", exc_info=True)
 
     env_pat = os.environ.get("GITHUB_PAT")
     return env_pat.strip() if env_pat and env_pat.strip() else None

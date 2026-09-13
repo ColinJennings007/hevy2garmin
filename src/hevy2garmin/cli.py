@@ -93,7 +93,7 @@ def cmd_init(args: argparse.Namespace) -> None:
 
         count = HevyClient(api_key=key).get_workout_count()
         print(f"✓ {count} workouts found")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # the CLI reports any failure to the user and exits
         print(f"✗ Failed: {e}")
         sys.exit(1)
 
@@ -297,7 +297,7 @@ def cmd_unsync(args: argparse.Namespace) -> None:
             client = get_client(config.get("garmin_email"))
             client.delete_activity(int(garmin_id))
             print(f"  ✓ Deleted Garmin activity {garmin_id}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # the CLI reports any failure to the user
             print(f"  ✗ Failed to delete from Garmin: {e}")
 
 
