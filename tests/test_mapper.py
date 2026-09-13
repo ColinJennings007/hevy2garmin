@@ -282,7 +282,9 @@ class TestTemplateIdDoesNotOverrideTheTable:
             Path(__file__).parent.parent / "src" / "hevy2garmin" / "template_map.py"
         ).read_text()
         for name in ("Cycling", "Treadmill", "Elliptical Trainer", "Rowing Machine"):
-            m = re.search(rf'"([0-9A-F]+)": \([\d, ]+\),\s+# {re.escape(name)}$', source, re.MULTILINE)
+            m = re.search(
+                rf'"([0-9A-F]+)": \([\d, ]+\),\s+# {re.escape(name)}$', source, re.MULTILINE
+            )
             assert m, f"no template id found for {name}"
             tid = m.group(1)
             assert tid in TEMPLATE_TO_GARMIN

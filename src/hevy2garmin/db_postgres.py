@@ -463,9 +463,7 @@ class PostgresDatabase(Database):
 
     def get_recent_synced(self, limit: int = 10) -> list[dict]:
         with self._get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM synced_workouts ORDER BY synced_at DESC LIMIT %s", (limit,)
-            )
+            cur.execute("SELECT * FROM synced_workouts ORDER BY synced_at DESC LIMIT %s", (limit,))
             return [dict(r) for r in cur.fetchall()]
 
     def record_sync_log(

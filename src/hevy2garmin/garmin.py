@@ -547,7 +547,6 @@ def generate_description(
     start = workout.get("start_time") or workout.get("startTime", "")
     end = workout.get("end_time") or workout.get("endTime", "")
     if start and end:
-
         try:
             fmt = "%Y-%m-%dT%H:%M:%S%z" if "T" in start else "%Y-%m-%d %H:%M:%S"
             t0 = parse_iso(start)
