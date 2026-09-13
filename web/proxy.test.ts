@@ -58,7 +58,14 @@ describe("proxy: /api/cron is public so the route's own CRON_SECRET check runs (
 
   it("with auth disabled outside production everything is open, including /api/settings", async () => {
     delete process.env.H2G_PASSWORD;
-    expect(passedThrough(await proxy(req("/api/settings")))).toBe(true);
+    // The check-web CI job runs with VERCEL=1 at job level; this case is about development.
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("NODE_ENV", "test");
+    try {
+      expect(passedThrough(await proxy(req("/api/settings")))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
