@@ -146,6 +146,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint
+        # The committed flat config (#549); `expo lint` would scaffold and rewrite, eslint does not.
+        run: npm run lint -- --max-warnings 0
+
       - name: Test
         run: npm test
 

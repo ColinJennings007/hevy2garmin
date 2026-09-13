@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 
+import { Colors, Fonts } from "./theme";
+
 // react-native ships Flow sources that Vite cannot parse; Platform.select is all theme.ts needs.
+// vi.mock is hoisted above the imports by vitest, so the import order above is fine.
 vi.mock("react-native", () => ({
   Platform: { select: (o: Record<string, unknown>) => o.default ?? o.web },
 }));
-
-import { Colors, Fonts } from "./theme";
 
 describe("theme", () => {
   it("light and dark define the same colour keys, so ThemeColor names both", () => {
