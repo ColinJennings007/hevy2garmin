@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncOneWorkout, type SyncOneResult } from "@/lib/sync-one";
+import { postgresSyncStore } from "@/lib/sync-store";
+import { recordSyncRun } from "hevy2garmin";
 import { getDb } from "@/lib/db";
 import { getGithubPat, getGithubRepo, triggerViaActions } from "@/lib/github";
 
@@ -56,7 +58,10 @@ export async function GET(request: Request) {
   const runs: SyncOneResult[] = [];
   try {
     for (let i = 0; i < CAP; i++) {
-      const r = await syncOneWorkout(sql, { dryRun: false });
+      // respectGrace: nobody is watching this run, so a workout that just
+      // finished can wait for the watch to upload its own activity rather than
+      // becoming a second copy of the same session.
+      const r = await syncOneWorkout(sql, { dryRun: false, respectGrace: true });
       if (r.status === "none") break;
       runs.push(r);
       if (r.status === "error") break;
@@ -67,5 +72,8 @@ export async function GET(request: Request) {
   }
 
   const synced = runs.filter((r) => r.status === "synced").length;
+  const deferred = runs.filter((r) => r.status === "deferred" || r.status === "skipped").length;
+  const failed = runs.filter((r) => r.status === "error").length;
+  await recordSyncRun(postgresSyncStore(sql), { synced, skipped: deferred, failed }, "cron");
   return NextResponse.json({ ok: true, mode: "inline", ran: runs.length, synced });
 }
