@@ -12,13 +12,21 @@ import type { GarminClient } from "garmin-auth";
 import {
   findActivityByStartTime, renameActivity, setDescription, uploadFit,
   getActivitiesByDate, getActivityExerciseSets, pushExerciseSets,
+  deleteActivity, downloadActivityFit,
   type UploadResult,
 } from "../garmin";
 import type { CandidateActivity } from "../merge-match";
 
 export interface GarminGateway {
-  /** READ: the id of an activity already at this start time, or null. */
-  findExistingActivity(startTime: string): Promise<number | null>;
+  /**
+   * READ: the id of an activity already at this start time, or null.
+   *
+   * `excludeActivityIds` is what makes the replace strategy work: the watch
+   * activity being replaced sits at the same start time, so without excluding
+   * it this lookup would match the activity we are about to delete and skip the
+   * upload that is supposed to take its place.
+   */
+  findExistingActivity(startTime: string, excludeActivityIds?: Array<number | string> | null): Promise<number | null>;
   /** WRITE: upload a FIT (bytes); resolve the activity id. */
   upload(fit: Uint8Array, workoutStart?: string): Promise<UploadResult>;
   /** WRITE: rename an activity. */
@@ -31,12 +39,19 @@ export interface GarminGateway {
   exerciseSets(activityId: number): Promise<Record<string, unknown>>;
   /** WRITE: replace an activity's exercise sets. Atomic; throws with Garmin's text. */
   putExerciseSets(activityId: number, payload: unknown): Promise<void>;
+  /**
+   * WRITE: delete an activity. Only the replace strategy uses it, and only
+   * after the named upload succeeded and the watch's HR was secured.
+   */
+  deleteActivity(activityId: number): Promise<void>;
+  /** READ: the raw FIT of an activity, the densest HR source there is. */
+  activityFit?(activityId: number | string): Promise<Uint8Array | null>;
 }
 
 /** The default gateway: thin passthroughs to the package's Garmin functions. */
 export function garminGateway(client: GarminClient): GarminGateway {
   return {
-    findExistingActivity: (startTime) => findActivityByStartTime(client, startTime),
+    findExistingActivity: (startTime, exclude) => findActivityByStartTime(client, startTime, exclude),
     upload: (fit, workoutStart) => uploadFit(client, fit, workoutStart),
     rename: (activityId, name) => renameActivity(client, activityId, name),
     describe: (activityId, description) => setDescription(client, activityId, description),
@@ -46,14 +61,25 @@ export function garminGateway(client: GarminClient): GarminGateway {
       (await getActivitiesByDate(client, s, e)) as unknown as CandidateActivity[],
     exerciseSets: (activityId) => getActivityExerciseSets(client, activityId),
     putExerciseSets: (activityId, payload) => pushExerciseSets(client, activityId, payload),
+    deleteActivity: (activityId) => deleteActivity(client, activityId),
+    activityFit: (activityId) => downloadActivityFit(client, activityId),
   };
 }
 
-/** What the engine needs from its host. All IO goes through these three. */
+/** What the engine needs from its host. All IO goes through these. */
 export interface SyncDeps {
   store: import("./store").SyncStore;
   /** Lazily built: only called once a Garmin read/write is actually needed. */
   gateway: () => Promise<GarminGateway>;
   /** The Hevy workout list, newest first (the order the engine picks in). */
   fetchWorkouts: () => Promise<import("./types").DedupWorkout[]>;
+  /**
+   * Where HR comes from and where a backup is kept. Optional: a consumer that
+   * supplies none still syncs, it just embeds no heart rate. The activity FIT
+   * source defaults to the gateway, so most consumers only need to add durable
+   * backup storage, which is the part a replace depends on.
+   */
+  hr?: Omit<import("../hr").HrDeps, "fetchActivityFit"> & {
+    fetchActivityFit?: (activityId: number | string) => Promise<Uint8Array | null>;
+  };
 }
