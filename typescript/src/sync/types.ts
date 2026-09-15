@@ -21,6 +21,7 @@ export type DedupDecision =
   | "already_synced" // layer 1: terminal synced_workouts row exists — skip
   | "existing_garmin_activity" // layer 2: Garmin already has an activity at this start time — match, do NOT upload
   | "claim_lost" // layer 3: another worker holds the pending claim — deferred
+  | "within_grace" // too new: the watch may not have uploaded its own activity yet — deferred
   | "no_candidates" // nothing left to sync
   | "no_start_time"; // workout has no start_time; can't run the layer-2 lookup safely
 
@@ -118,6 +119,15 @@ export interface SyncOneOptions {
    * upload); if it is not among the candidates the result is `no_candidates`.
    */
   targetHevyId?: string;
+  /**
+   * Hold back a workout that ended less than `graceMinutes` ago, so the watch
+   * has time to upload its own activity first. DEFAULT false: an unattended run
+   * (cron, auto-sync) passes true, while a person pressing Sync Now has already
+   * decided they want it now.
+   */
+  respectGrace?: boolean;
+  /** The wait applied when `respectGrace` is set. Default 120; 0 disables it. */
+  graceMinutes?: number;
 }
 
 /** Options for reconcile/retry. */
