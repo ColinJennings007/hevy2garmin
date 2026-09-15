@@ -140,6 +140,12 @@ export interface SyncOneOptions {
   merge?: MergeSettings;
   /** The user's `hr_fusion` setting. Default on, matching the Python config. */
   hrFusion?: boolean;
+  /**
+   * The user's profile and timing, the way `_get_profile` feeds `generate_fit`
+   * in the Python. Without it a FIT is encoded for an 80 kg person born in
+   * 1990, with no timezone, whoever the user is.
+   */
+  profile?: Partial<import("../fit").FitProfile>;
 }
 
 /**
@@ -162,6 +168,8 @@ export interface MergeSettings {
   maxDriftMinutes?: number;
   /** User overrides for exercises the built-in mapping table does not cover. */
   customMappings?: Record<string, [number, number]>;
+  /** The user's Timing settings, applied to the sets a merge pushes. */
+  timing?: Partial<import("../exercise-sets").SetTiming>;
 }
 
 /** Options for reconcile/retry. */

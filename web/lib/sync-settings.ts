@@ -10,13 +10,18 @@
  * Key names and defaults match `config.py`, so a database shared with the
  * Python pipeline means the same thing to both.
  */
-import type { MergeSettings } from "hevy2garmin";
+import type { FitProfile, MergeSettings } from "hevy2garmin";
 import type { Sql } from "./pending-store";
 
 export interface SyncSettings {
   merge: MergeSettings;
   hrFusion: boolean;
   descriptionEnabled: boolean;
+  /**
+   * Who the user is and how long their sets take. Without it a FIT is encoded
+   * for an 80 kg person born in 1990, with no timezone, whoever is syncing.
+   */
+  profile: Partial<FitProfile>;
 }
 
 /** What a fresh install syncs with: merge on, sets pushed into the watch activity. */
@@ -30,7 +35,23 @@ export const DEFAULT_SYNC_SETTINGS: SyncSettings = {
   },
   hrFusion: true,
   descriptionEnabled: true,
+  profile: {},
 };
+
+/** `timing` in the stored config, in the engine's spelling. */
+const TIMING_KEYS: Array<[string, keyof FitProfile]> = [
+  ["working_set_seconds", "workingSetS"],
+  ["warmup_set_seconds", "warmupSetS"],
+  ["rest_between_sets_seconds", "restSetsS"],
+  ["rest_between_exercises_seconds", "restExercisesS"],
+];
+
+/** `user_profile` in the stored config, in the engine's spelling. */
+const PROFILE_KEYS: Array<[string, keyof FitProfile]> = [
+  ["weight_kg", "weightKg"],
+  ["birth_year", "birthYear"],
+  ["vo2max", "vo2max"],
+];
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -83,11 +104,27 @@ export async function loadCustomMappings(sql: Sql): Promise<Record<string, [numb
  * with merge silently off.
  */
 export async function loadSyncSettings(sql: Sql): Promise<SyncSettings> {
-  const [mergeCfg, hrCfg, customMappings] = await Promise.all([
+  const [mergeCfg, hrCfg, profileCfg, timingCfg, customMappings] = await Promise.all([
     readConfig(sql, "merge_settings"),
     readConfig(sql, "hr_fusion"),
+    readConfig(sql, "user_profile"),
+    readConfig(sql, "timing"),
     loadCustomMappings(sql),
   ]);
+
+  // Only fields the user actually set are carried, so an absent one keeps the
+  // engine's default rather than becoming a zero.
+  const profile: Partial<FitProfile> = {};
+  for (const [stored, engine] of PROFILE_KEYS) {
+    const n = Number(profileCfg?.[stored]);
+    if (Number.isFinite(n) && n > 0) (profile as Record<string, unknown>)[engine] = n;
+  }
+  const tz = profileCfg?.timezone;
+  if (typeof tz === "string" && tz.trim()) profile.timezone = tz.trim();
+  for (const [stored, engine] of TIMING_KEYS) {
+    const n = Number(timingCfg?.[stored]);
+    if (Number.isFinite(n) && n >= 0) (profile as Record<string, unknown>)[engine] = n;
+  }
 
   const d = DEFAULT_SYNC_SETTINGS;
   const strategy = String(mergeCfg?.merge_watch_strategy ?? d.merge.watchStrategy);
@@ -107,8 +144,17 @@ export async function loadSyncSettings(sql: Sql): Promise<SyncSettings> {
       overlapThreshold: num(mergeCfg?.merge_overlap_pct, 70) / 100,
       maxDriftMinutes: num(mergeCfg?.merge_max_drift_min, d.merge.maxDriftMinutes!),
       customMappings: Object.keys(customMappings).length ? customMappings : undefined,
+      // The same four numbers the FIT uses, so a merged workout and an
+      // uploaded one lay their sets out the same way.
+      timing: {
+        workingSetS: profile.workingSetS,
+        warmupSetS: profile.warmupSetS,
+        restSetsS: profile.restSetsS,
+        restExercisesS: profile.restExercisesS,
+      },
     },
     hrFusion: bool(hrCfg?.enabled, d.hrFusion),
     descriptionEnabled: bool(mergeCfg?.description_enabled, d.descriptionEnabled),
+    profile,
   };
 }

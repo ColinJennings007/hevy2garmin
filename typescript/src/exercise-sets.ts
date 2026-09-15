@@ -39,10 +39,27 @@ export function categoryToString(catId: number): string {
 }
 
 // Set/rest timing defaults, the same profile fit.ts uses.
-const WORKING_SET_S = 40;
-const WARMUP_SET_S = 25;
-const REST_SETS_S = 75;
-const REST_EXERCISES_S = 120;
+/**
+ * How long a set and the rest after it are assumed to last.
+ *
+ * The same four numbers the FIT encoder uses, and the same four the Settings
+ * page offers under Timing. They are defaults, not constants: a user who rests
+ * three minutes between sets lays their workout out differently from one who
+ * rests one, and a merged workout should look like the uploaded one.
+ */
+export interface SetTiming {
+  workingSetS: number;
+  warmupSetS: number;
+  restSetsS: number;
+  restExercisesS: number;
+}
+
+export const DEFAULT_SET_TIMING: SetTiming = {
+  workingSetS: 40,
+  warmupSetS: 25,
+  restSetsS: 75,
+  restExercisesS: 120,
+};
 
 export interface ExercisePayloadEntry {
   category: string;
@@ -94,7 +111,9 @@ export function buildExerciseSetsPayload(
   activityStartTime: string,
   activityDurationS: number,
   customMappings?: Record<string, [number, number]>,
+  timing?: Partial<SetTiming>,
 ): ExerciseSetsPayload {
+  const t: SetTiming = { ...DEFAULT_SET_TIMING, ...timing };
   const exercises = workout.exercises ?? [];
   if (!exercises.length) return { activityId, exerciseSets: [] };
 
@@ -108,10 +127,10 @@ export function buildExerciseSetsPayload(
     sets.forEach((s, sIdx) => {
       const isWarmup = (s.type ?? "normal") === "warmup";
       const explicit = s.duration_seconds;
-      const setDur = explicit && explicit > 0 ? Number(explicit) : isWarmup ? WARMUP_SET_S : WORKING_SET_S;
+      const setDur = explicit && explicit > 0 ? Number(explicit) : isWarmup ? t.warmupSetS : t.workingSetS;
       const isLastSet = sIdx === sets.length - 1;
       const isLastExercise = exIdx === exercises.length - 1;
-      const restDur = isLastSet && isLastExercise ? 0 : isLastSet ? REST_EXERCISES_S : REST_SETS_S;
+      const restDur = isLastSet && isLastExercise ? 0 : isLastSet ? t.restExercisesS : t.restSetsS;
       all.push({ exIdx, set: s, setDur, restDur });
     });
   });

@@ -62,6 +62,7 @@ function mergeOptionsOf(s: MergeSettings): MergeOptions {
     maxDriftMinutes: s.maxDriftMinutes,
     activityTypes: s.activityTypes,
     customMappings: s.customMappings,
+    timing: s.timing,
   };
 }
 
@@ -142,6 +143,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
   const merge = options.merge ?? {};
   const mergeOptions = mergeOptionsOf(merge);
   const hrFusion = options.hrFusion ?? true;
+  const profile = options.profile;
   const { store } = deps;
 
   // 1) Fetch the Hevy list + the dedup id-sets, then pick the next unsynced
@@ -211,7 +213,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
     setsPushed: number,
     fallbackReason: string | null = null,
   ): Promise<SyncOneResult> {
-    const stats = fitStatsOf(generateFit(picked as unknown as FitWorkout, null));
+    const stats = fitStatsOf(generateFit(picked as unknown as FitWorkout, null, { profile }));
     await gateway.rename(activityId, title);
     if (descriptionEnabled) {
       await gateway.describe(activityId, generateDescription(picked, stats.calories, stats.avgHr));
@@ -302,7 +304,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
 
   // 4) Generate the FIT (pure/in-memory). Runs in dry-run too, so a preview
   //    shows real stats. No IO, no upload.
-  const fitResult = generateFit(workout as unknown as FitWorkout, hrSamples);
+  const fitResult = generateFit(workout as unknown as FitWorkout, hrSamples, { profile });
   const fitStats = fitStatsOf(fitResult);
 
   // 5) Layer 2 — ask Garmin whether an activity already exists at this start

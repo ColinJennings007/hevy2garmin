@@ -373,3 +373,39 @@ describe("hr_fusion", () => {
     expect(dailyHeartRate).not.toHaveBeenCalled();
   });
 });
+
+describe("the profile and timing settings", () => {
+  it("encodes the FIT for the user, not for a default 80 kg person born in 1990", async () => {
+    const heavier = await syncOneWorkout(deps(gateway({}, []), store()), {
+      dryRun: false,
+      hrFusion: false,
+      profile: { weightKg: 120, birthYear: 1970, vo2max: 35 },
+    });
+    const dflt = await syncOneWorkout(deps(gateway({}, []), store()), {
+      dryRun: false,
+      hrFusion: false,
+    });
+    expect(heavier.fitStats?.calories).not.toBe(dflt.fitStats?.calories);
+  });
+
+  it("carries the user's set timing into a merge", async () => {
+    const g = gateway();
+    await syncOneWorkout(deps(g, store()), {
+      dryRun: false,
+      hrFusion: false,
+      merge: {
+        enabled: true,
+        watchStrategy: "merge",
+        timing: { workingSetS: 90, restSetsS: 200, warmupSetS: 30, restExercisesS: 300 },
+      },
+    });
+    const [, payload] = (g.putExerciseSets as ReturnType<typeof vi.fn>).mock.calls[0];
+    const sets = (payload as { exerciseSets: Array<{ duration: number; setType: string }> }).exerciseSets;
+    // The activity lasts an hour and the nominal plan is longer, so everything
+    // is scaled down together. What matters is the ratio the user asked for:
+    // a rest set is 200/90 times an active one.
+    const active = sets.find((x) => x.setType === "ACTIVE")!.duration;
+    const rest = sets.find((x) => x.setType === "REST")!.duration;
+    expect(rest / active).toBeCloseTo(200 / 90, 2);
+  });
+});
