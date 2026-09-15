@@ -7,7 +7,7 @@
  * route builds a store from its `getDb()` tag and hands it to the engine.
  * Everything here is local bookkeeping: NOTHING calls Garmin or Hevy.
  */
-import type { MarkSyncedOpts, PendingUpdate, SyncStore } from "hevy2garmin";
+import type { MarkSyncedOpts, PendingUpdate, SyncLogEntry, SyncStore } from "hevy2garmin";
 import {
   claimPending,
   completePending,
@@ -32,5 +32,21 @@ export function postgresSyncStore(sql: Sql): SyncStore {
     deletePending: (hevyId) => deletePending(hevyId, sql),
     completePending: (hevyId, opts: MarkSyncedOpts) => completePending(hevyId, opts, sql),
     markSynced: (hevyId, opts: MarkSyncedOpts) => markSynced(hevyId, opts, sql),
+    recordSyncLog: (entry: SyncLogEntry) => recordSyncLog(entry, sql),
   };
+}
+
+/**
+ * Append one row to `sync_log`, the table the dashboard's Sync log panel reads.
+ *
+ * Nothing on this path ever wrote to it, so the panel said "No sync runs
+ * recorded yet" while syncs were plainly happening, and a user read that as
+ * proof his setup was broken (#565). Mirrors `record_sync_log` in
+ * `syncstate.py`, including the column defaults.
+ */
+async function recordSyncLog(entry: SyncLogEntry, sql: Sql): Promise<void> {
+  await sql`
+    INSERT INTO sync_log (synced, skipped, failed, trigger)
+    VALUES (${entry.synced}, ${entry.skipped}, ${entry.failed}, ${entry.trigger})
+  `;
 }

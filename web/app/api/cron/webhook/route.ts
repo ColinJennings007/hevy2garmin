@@ -56,7 +56,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await syncOneWorkout(sql, { dryRun: false });
+    // Unattended, like the cron: wait out the grace period so a workout that
+    // just finished does not beat the watch's own activity to Garmin.
+    const result = await syncOneWorkout(sql, { dryRun: false, respectGrace: true });
     return NextResponse.json({ ok: true, mode: "inline", status: result.status });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { syncOneWorkout, type SyncOneResult } from "@/lib/sync-one";
+import { postgresSyncStore } from "@/lib/sync-store";
+import { recordSyncRun } from "hevy2garmin";
 import { getDb } from "@/lib/db";
 import { getGithubPat, getGithubRepo, triggerViaActions } from "@/lib/github";
 import { verifySession, SESSION_COOKIE, authEnabled } from "@/lib/auth";
@@ -131,6 +133,15 @@ export async function POST(request: Request) {
   const totalSkipped = runs.filter((r) => r.status === "skipped").length;
   const totalDeferred = runs.filter((r) => r.status === "deferred").length;
   const totalError = runs.filter((r) => r.status === "error").length;
+
+  // One row per run, for the dashboard's Sync log. Deferred runs count as
+  // skipped: from the panel's point of view a workout that waited is a workout
+  // that did not sync this time. Best effort, and it never throws.
+  await recordSyncRun(
+    postgresSyncStore(sql),
+    { synced: totalSynced, skipped: totalSkipped + totalDeferred, failed: totalError },
+    "manual",
+  );
 
   return NextResponse.json({
     dryRun: false,

@@ -61,7 +61,7 @@ describe("postgresSyncStore binds the engine's SyncStore to pending-store for on
   it("exposes exactly the SyncStore surface (bookkeeping only, no Garmin/Hevy)", () => {
     expect(Object.keys(store).sort()).toEqual([
       "claimPending", "completePending", "deletePending", "getPending", "isSynced",
-      "loadPendingIds", "loadSyncedIds", "markSynced", "updatePending",
+      "loadPendingIds", "loadSyncedIds", "markSynced", "recordSyncLog", "updatePending",
     ]);
   });
 });

@@ -57,6 +57,8 @@ describe("GET /api/cron/sync", () => {
     expect(json.mode).toBe("inline");
     expect(json.ran).toBe(2);
     expect(json.synced).toBe(1);
-    expect(syncOneWorkout).toHaveBeenCalledWith(expect.anything(), { dryRun: false });
+    // Unattended, so it waits out the grace period rather than beating the
+    // watch's own activity to Garmin.
+    expect(syncOneWorkout).toHaveBeenCalledWith(expect.anything(), { dryRun: false, respectGrace: true });
   });
 });

@@ -50,6 +50,8 @@ describe("POST /api/cron/webhook", () => {
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.mode).toBe("inline");
-    expect(syncOneWorkout).toHaveBeenCalledWith(expect.anything(), { dryRun: false });
+    // Unattended, so it waits out the grace period rather than beating the
+    // watch's own activity to Garmin.
+    expect(syncOneWorkout).toHaveBeenCalledWith(expect.anything(), { dryRun: false, respectGrace: true });
   });
 });
