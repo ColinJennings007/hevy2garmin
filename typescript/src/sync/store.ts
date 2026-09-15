@@ -31,4 +31,12 @@ export interface SyncStore {
   completePending(hevyId: string, opts: MarkSyncedOpts): Promise<void>;
   /** Record a workout as terminally synced (status='success'). Local ledger only. */
   markSynced(hevyId: string, opts: MarkSyncedOpts): Promise<void>;
+  /**
+   * Append one row to the run log the dashboard's Sync log panel reads.
+   *
+   * Optional so an existing consumer keeps compiling, but a consumer that
+   * omits it leaves that panel permanently empty, which reads to a user as
+   * proof that nothing ever ran (#565, #569).
+   */
+  recordSyncLog?(entry: import("./run-log").SyncLogEntry): Promise<void>;
 }
