@@ -24,7 +24,7 @@ import {
   type MergeMatchOptions,
   type TimedWorkout,
 } from "../merge-match";
-import { buildExerciseSetsPayload, pushWithNameFallback } from "../exercise-sets";
+import { buildExerciseSetsPayload, pushWithNameFallback, type SetTiming } from "../exercise-sets";
 import type { GarminGateway } from "./gateway";
 
 export type WatchStrategy = "merge" | "replace" | "describe";
@@ -48,6 +48,11 @@ export interface MergeOptions extends MergeMatchOptions {
   strategy?: WatchStrategy;
   /** User overrides for exercises the built-in table does not cover. */
   customMappings?: Record<string, [number, number]>;
+  /**
+   * How long a set and its rest are assumed to last. The user's Timing
+   * settings, so a merged workout is laid out the way an uploaded one is.
+   */
+  timing?: Partial<SetTiming>;
 }
 
 export interface MergeOutcome {
@@ -121,6 +126,7 @@ export async function mergeIntoWatchActivity(
     startTime,
     durationS,
     options.customMappings,
+    options.timing,
   );
   if (!payload.exerciseSets.length) {
     return { merged: false, activityId: act.activityId, strategy, reason: "workout has no sets to push" };

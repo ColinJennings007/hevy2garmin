@@ -127,3 +127,56 @@ describe("loadCustomMappings", () => {
     expect(await loadCustomMappings(brokenSql())).toEqual({});
   });
 });
+
+describe("the profile and timing settings", () => {
+  it("reads the user's own body and set times, in the engine's spelling", async () => {
+    const s = await loadSyncSettings(
+      fakeSql({
+        user_profile: { weight_kg: 93.5, birth_year: 1994, vo2max: 52, timezone: "Europe/Athens" },
+        timing: {
+          working_set_seconds: 60,
+          warmup_set_seconds: 30,
+          rest_between_sets_seconds: 180,
+          rest_between_exercises_seconds: 240,
+        },
+      }),
+    );
+    expect(s.profile).toEqual({
+      weightKg: 93.5,
+      birthYear: 1994,
+      vo2max: 52,
+      timezone: "Europe/Athens",
+      workingSetS: 60,
+      warmupSetS: 30,
+      restSetsS: 180,
+      restExercisesS: 240,
+    });
+  });
+
+  it("gives the merge the same set times as the FIT, so both lay out alike", async () => {
+    const s = await loadSyncSettings(
+      fakeSql({ timing: { working_set_seconds: 60, rest_between_sets_seconds: 180 } }),
+    );
+    expect(s.merge.timing).toMatchObject({ workingSetS: 60, restSetsS: 180 });
+  });
+
+  it("carries only what the user set, so a missing field keeps the engine default", async () => {
+    // Sending an explicit zero for an unset weight would encode a FIT for a
+    // person who weighs nothing.
+    const s = await loadSyncSettings(fakeSql({ user_profile: { weight_kg: 90 } }));
+    expect(s.profile).toEqual({ weightKg: 90 });
+    expect(s.profile.birthYear).toBeUndefined();
+  });
+
+  it("keeps a zero rest, which is a real choice, but not a blank timezone", async () => {
+    const s = await loadSyncSettings(
+      fakeSql({ timing: { rest_between_sets_seconds: 0 }, user_profile: { timezone: "  " } }),
+    );
+    expect(s.profile.restSetsS).toBe(0);
+    expect(s.profile.timezone).toBeUndefined();
+  });
+
+  it("is empty for a database with nothing saved", async () => {
+    expect((await loadSyncSettings(fakeSql())).profile).toEqual({});
+  });
+});

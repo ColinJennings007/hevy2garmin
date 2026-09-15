@@ -94,6 +94,7 @@ export async function syncOneWorkout(sql: Sql, options: SyncOneOptions = {}) {
     merge: saved.merge,
     hrFusion: saved.hrFusion,
     descriptionEnabled: saved.descriptionEnabled,
+    profile: saved.profile,
     ...engineOptions, // an explicit option still wins, which is what tests rely on
   });
 }

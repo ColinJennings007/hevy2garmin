@@ -212,3 +212,54 @@ describe("pushWithNameFallback", () => {
     ).rejects.toThrow("500 Server Error");
   });
 });
+
+describe("set timing comes from the user's settings", () => {
+  const w = {
+    exercises: [
+      {
+        title: "Bench Press (Barbell)",
+        sets: [
+          { reps: 10, weight_kg: 60, type: "warmup" },
+          { reps: 8, weight_kg: 80 },
+        ],
+      },
+      { title: "Bench Press (Barbell)", sets: [{ reps: 5, weight_kg: 90 }] },
+    ],
+  };
+  const START = "2026-09-15T10:00:00Z";
+
+  /** Durations in payload order, rounded, so a scale of 1 is readable. */
+  function durations(timing?: Record<string, number>) {
+    // A duration equal to the ideal total keeps the scale at 1, so the numbers
+    // that come back are the ones that went in.
+    const ideal = timing
+      ? timing.warmupSetS + timing.restSetsS + timing.workingSetS + timing.restExercisesS + timing.workingSetS
+      : 25 + 75 + 40 + 120 + 40;
+    const p = buildExerciseSetsPayload(w as never, 1, START, ideal, undefined, timing);
+    return p.exerciseSets.map((s) => Math.round(s.duration));
+  }
+
+  it("uses the documented defaults when the user changed nothing", () => {
+    expect(durations()).toEqual([25, 75, 40, 120, 40]);
+  });
+
+  it("lays the sets out with the user's own times", () => {
+    // Someone who rests three minutes between sets does not train like someone
+    // who rests one, and the merged activity should say so.
+    expect(
+      durations({ warmupSetS: 30, workingSetS: 60, restSetsS: 180, restExercisesS: 240 }),
+    ).toEqual([30, 180, 60, 240, 60]);
+  });
+
+  it("an explicit per-set duration from Hevy still wins over the setting", () => {
+    const p = buildExerciseSetsPayload(
+      { exercises: [{ title: "Plank", sets: [{ duration_seconds: 90 }] }] } as never,
+      1,
+      START,
+      90,
+      undefined,
+      { workingSetS: 5 },
+    );
+    expect(Math.round(p.exerciseSets[0].duration)).toBe(90);
+  });
+});
