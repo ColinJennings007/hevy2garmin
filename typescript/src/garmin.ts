@@ -108,3 +108,67 @@ async function postJson(client: GarminClient, path: string, body: unknown): Prom
   if (res.status === 401) { await client.refreshDiToken(); res = await req(); }
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
 }
+
+/**
+ * Activities Garmin holds in a date range, used to find the watch recording a
+ * Hevy workout belongs to. Dates are YYYY-MM-DD.
+ */
+export async function getActivitiesByDate(
+  client: GarminClient,
+  startDate: string,
+  endDate: string,
+  limit = 50,
+): Promise<Array<Record<string, unknown>>> {
+  const q = `startDate=${startDate}&endDate=${endDate}&limit=${limit}&start=0`;
+  return client.connectapi<Array<Record<string, unknown>>>(
+    `/activitylist-service/activities/search/activities?${q}`,
+  );
+}
+
+/** An activity's current exercise sets, taken as a backup before a merge. */
+export async function getActivityExerciseSets(
+  client: GarminClient,
+  activityId: number,
+): Promise<Record<string, unknown>> {
+  await sleep(1);
+  return client.connectapi<Record<string, unknown>>(
+    `/activity-service/activity/${activityId}/exerciseSets`,
+  );
+}
+
+/**
+ * PUT exercise sets onto an existing activity, replacing ALL of them.
+ *
+ * Atomic: Garmin accepts or rejects the whole payload and names no offending
+ * exercise, which is why callers go through pushWithNameFallback rather than
+ * calling this directly.
+ *
+ * The failure text is carried into the thrown Error on purpose. The retry
+ * decides what to do by reading it, so swallowing it would turn a recoverable
+ * rejection into a total loss of the user's sets.
+ */
+export async function pushExerciseSets(
+  client: GarminClient,
+  activityId: number,
+  payload: unknown,
+): Promise<void> {
+  const path = `/activity-service/activity/${activityId}/exerciseSets`;
+  const url = `https://connectapi.${client.domain}${path}`;
+  await sleep(1); // manual rate limit, matching the Python
+  const req = () => fetch(url, {
+    method: "POST",
+    headers: nativeHeaders(client.di_token!, {
+      "Content-Type": "application/json",
+      "X-HTTP-Method-Override": "PUT",
+      NK: "NT",
+    }),
+    body: JSON.stringify(payload),
+  });
+  let res = await req();
+  if (res.status === 401) { await client.refreshDiToken(); res = await req(); }
+  // 204 No Content is the success shape here.
+  if (!res.ok && res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`PUT exerciseSets ${activityId} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+}

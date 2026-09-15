@@ -28,6 +28,8 @@ export interface CandidateActivity {
   startTimeLocal?: string;
   activityType?: { typeKey?: string };
   activityName?: string;
+  /** FIT manufacturer. Our own uploads are DEVELOPMENT; anything else is a device. */
+  manufacturer?: string;
 }
 
 export interface MergeMatchOptions {

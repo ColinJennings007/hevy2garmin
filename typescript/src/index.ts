@@ -7,3 +7,5 @@ export * from "./sync";
 export * from "./match";
 export * from "./muscle-groups";
 export * from "./merge-match";
+export * from "./exercise-strings";
+export * from "./exercise-sets";
