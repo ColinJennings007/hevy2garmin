@@ -6,3 +6,4 @@ export * from "./garmin";
 export * from "./sync";
 export * from "./match";
 export * from "./muscle-groups";
+export * from "./merge-match";
