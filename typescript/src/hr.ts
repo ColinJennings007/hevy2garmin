@@ -125,6 +125,33 @@ export function extractHrFromFit(
   return out.sort((a, b) => a.time - b.time);
 }
 
+/**
+ * Garmin's daily monitoring readings, sliced to the workout window.
+ *
+ * Port of the slicing in `fetch_watch_hr` (`hr.py`), including the one-minute
+ * buffer either side: the feed is sampled every couple of minutes, so a strict
+ * window would often drop the readings closest to the start and the end.
+ */
+export function dailyHrToPoints(
+  values: Array<[number, number | null]> | null | undefined,
+  workoutStart: Date,
+  workoutEnd: Date,
+): HrPoint[] {
+  if (!Array.isArray(values)) return [];
+  const startMs = workoutStart.getTime();
+  const endMs = workoutEnd.getTime();
+  const buffer = 60_000;
+  const out: HrPoint[] = [];
+  for (const entry of values) {
+    if (!Array.isArray(entry) || entry.length < 2) continue;
+    const [ts, bpm] = entry;
+    if (bpm == null || typeof ts !== "number") continue;
+    if (ts < startMs - buffer || ts > endMs + buffer) continue;
+    out.push({ time: Math.max(0, (ts - startMs) / 1000), hr: Math.trunc(Number(bpm)) });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
 /** A zip begins with the local file header signature "PK\x03\x04". */
 export function looksLikeZip(b: Uint8Array): boolean {
   return b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04;

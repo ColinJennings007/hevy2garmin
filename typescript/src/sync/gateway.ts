@@ -12,7 +12,7 @@ import type { GarminClient } from "garmin-auth";
 import {
   findActivityByStartTime, renameActivity, setDescription, uploadFit,
   getActivitiesByDate, getActivityExerciseSets, pushExerciseSets,
-  deleteActivity, downloadActivityFit,
+  deleteActivity, downloadActivityFit, getDailyHeartRate,
   type UploadResult,
 } from "../garmin";
 import type { CandidateActivity } from "../merge-match";
@@ -46,6 +46,12 @@ export interface GarminGateway {
   deleteActivity(activityId: number): Promise<void>;
   /** READ: the raw FIT of an activity, the densest HR source there is. */
   activityFit?(activityId: number | string): Promise<Uint8Array | null>;
+  /**
+   * READ: Garmin's daily wrist heart rate for a date, as [epoch ms, bpm].
+   * The last-resort HR source, and the only one that covers a workout the
+   * watch never recorded as an activity.
+   */
+  dailyHeartRate?(date: string): Promise<Array<[number, number | null]>>;
 }
 
 /** The default gateway: thin passthroughs to the package's Garmin functions. */
@@ -63,6 +69,7 @@ export function garminGateway(client: GarminClient): GarminGateway {
     putExerciseSets: (activityId, payload) => pushExerciseSets(client, activityId, payload),
     deleteActivity: (activityId) => deleteActivity(client, activityId),
     activityFit: (activityId) => downloadActivityFit(client, activityId),
+    dailyHeartRate: (date) => getDailyHeartRate(client, date),
   };
 }
 

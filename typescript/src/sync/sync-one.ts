@@ -28,7 +28,7 @@
  * the Hevy fetch. The engine itself is pure orchestration.
  */
 import { generateFit, type FitResult, type HevyWorkout as FitWorkout } from "../fit";
-import { HRBackupError, hrForSync, type HrPoint } from "../hr";
+import { dailyHrToPoints, HRBackupError, hrForSync, type HrPoint } from "../hr";
 import { filterUnsynced } from "./dedup";
 import { generateDescription } from "./description";
 import { checkGracePeriod, DEFAULT_GRACE_MINUTES } from "./grace";
@@ -77,6 +77,12 @@ function hrDeps(deps: SyncDeps, gateway: GarminGateway) {
     fetchActivityFit:
       supplied.fetchActivityFit ??
       (gateway.activityFit ? (id: number | string) => gateway.activityFit!(id) : undefined),
+    dailyHr:
+      supplied.dailyHr ??
+      (gateway.dailyHeartRate
+        ? async (start: Date, end: Date) =>
+            dailyHrToPoints(await gateway.dailyHeartRate!(start.toISOString().slice(0, 10)), start, end)
+        : undefined),
   };
 }
 
