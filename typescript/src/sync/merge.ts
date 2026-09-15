@@ -17,7 +17,13 @@
  *   replace   upload a named activity and delete the watch copy. Real names, at
  *             the cost of the watch-only metrics.
  */
-import { findMergeMatch, mergeSearchRange, type CandidateActivity, type MergeMatchOptions } from "../merge-match";
+import {
+  findMergeMatch,
+  mergeSearchRange,
+  type CandidateActivity,
+  type MergeMatchOptions,
+  type TimedWorkout,
+} from "../merge-match";
 import { buildExerciseSetsPayload, pushWithNameFallback } from "../exercise-sets";
 import type { GarminGateway } from "./gateway";
 
@@ -71,7 +77,7 @@ export interface MergeOutcome {
  */
 export async function mergeIntoWatchActivity(
   gateway: GarminGateway,
-  workout: { start_time?: string; startTime?: string; end_time?: string; endTime?: string; exercises?: unknown[] },
+  workout: TimedWorkout & { exercises?: unknown[] },
   options: MergeOptions = {},
 ): Promise<MergeOutcome> {
   const strategy = options.strategy ?? DEFAULT_WATCH_STRATEGY;

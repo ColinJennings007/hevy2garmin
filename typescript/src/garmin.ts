@@ -63,13 +63,26 @@ export async function uploadFit(
   return { uploadId, activityId };
 }
 
-/** Find an activity by its start time (matches the uploaded FIT). */
-export async function findActivityByStartTime(client: GarminClient, targetStart: string): Promise<number | null> {
+/**
+ * Find an activity by its start time (matches the uploaded FIT).
+ *
+ * `excludeActivityIds` exists for the replace strategy: the watch activity
+ * being replaced sits at the same start time as the workout, so without the
+ * exclusion this would report the very activity we are about to delete and the
+ * upload would be skipped.
+ */
+export async function findActivityByStartTime(
+  client: GarminClient,
+  targetStart: string,
+  excludeActivityIds?: Array<number | string> | null,
+): Promise<number | null> {
   const acts = await client.connectapi<Array<{ activityId: number; startTimeGMT?: string; startTimeLocal?: string }>>(
     "/activitylist-service/activities/search/activities?limit=10",
   );
+  const excluded = new Set((excludeActivityIds ?? []).map((id) => String(id)));
   const target = new Date(targetStart.replace(" ", "T")).getTime();
   for (const a of acts) {
+    if (excluded.has(String(a.activityId))) continue;
     const t = a.startTimeGMT ?? a.startTimeLocal;
     if (t && Math.abs(new Date(t.replace(" ", "T") + (t.includes("Z") ? "" : "Z")).getTime() - target) < 5 * 60 * 1000) {
       return a.activityId;
@@ -95,6 +108,32 @@ export async function deleteActivity(client: GarminClient, activityId: number): 
   let res = await req();
   if (res.status === 401) { await client.refreshDiToken(); res = await req(); }
   if (![200, 204].includes(res.status)) throw new Error(`delete activity ${activityId} → ${res.status}`);
+}
+
+/**
+ * The original file Garmin holds for an activity, which for a watch recording
+ * is the device FIT and the only place its per-second heart rate exists.
+ *
+ * The response is normally a zip holding one .fit; `extractHrFromFit` handles
+ * both that and a bare FIT. Returns null rather than throwing, because a failed
+ * download must not break a sync: the caller falls back to another HR source,
+ * and the one case where the HR is not optional is enforced by `hrForSync`.
+ */
+export async function downloadActivityFit(
+  client: GarminClient,
+  activityId: number | string,
+): Promise<Uint8Array | null> {
+  const url = `https://connectapi.${client.domain}/download-service/files/activity/${activityId}`;
+  const req = () => fetch(url, { headers: nativeHeaders(client.di_token!, { NK: "NT" }) });
+  try {
+    let res = await req();
+    if (res.status === 401) { await client.refreshDiToken(); res = await req(); }
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return bytes.length ? bytes : null;
+  } catch {
+    return null;
+  }
 }
 
 async function postJson(client: GarminClient, path: string, body: unknown): Promise<void> {

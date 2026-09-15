@@ -43,6 +43,17 @@ export interface MergeMatchOptions {
   now?: Date;
 }
 
+/**
+ * The timestamps a match needs. Nullable because a Hevy workout row carries
+ * nulls, and every reader here already treats a missing time as "unknown".
+ */
+export interface TimedWorkout {
+  start_time?: string | null;
+  startTime?: string | null;
+  end_time?: string | null;
+  endTime?: string | null;
+}
+
 export interface MergeMatch {
   activity: CandidateActivity;
   /** Fraction of the workout the activity covers, 0..1. */
@@ -78,7 +89,7 @@ const FUTURE_MARGIN_MS = 5 * 60 * 1000;
  * `score = overlapPct * 100 - driftMinutes * 0.5`.
  */
 export function findMergeMatch(
-  workout: { start_time?: string; startTime?: string; end_time?: string; endTime?: string },
+  workout: TimedWorkout,
   activities: CandidateActivity[],
   options: MergeMatchOptions = {},
 ): MergeMatch | null {
@@ -130,7 +141,7 @@ export function findMergeMatch(
  * day's activities.
  */
 export function mergeSearchRange(
-  workout: { start_time?: string; startTime?: string; end_time?: string; endTime?: string },
+  workout: TimedWorkout,
 ): { start: string; end: string } | null {
   const hevyStart = toUtcDate(workout.start_time || workout.startTime || "");
   const hevyEnd = toUtcDate(workout.end_time || workout.endTime || "");

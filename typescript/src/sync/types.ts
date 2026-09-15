@@ -48,8 +48,12 @@ export interface SyncOneResult {
   garminActivityId: number | null;
   /** How many candidates remained after dedup (context for the caller). */
   remaining: number;
-  syncMethod: "upload" | "match" | null;
+  syncMethod: "upload" | "match" | "merge" | null;
   error: string | null;
+  /** Set when a merge was tried and fell through, so the caller can log why. */
+  mergeFallbackReason?: string | null;
+  /** ACTIVE sets pushed into a watch activity by a merge. */
+  setsPushed?: number;
 }
 
 /** A candidate workout surfaced to a candidates listing. */
@@ -128,6 +132,36 @@ export interface SyncOneOptions {
   respectGrace?: boolean;
   /** The wait applied when `respectGrace` is set. Default 120; 0 disables it. */
   graceMinutes?: number;
+  /**
+   * The user's merge settings, as saved on the Settings page. Omitted means
+   * merge is off and the engine uploads a fresh activity, which is what it did
+   * before these were wired up.
+   */
+  merge?: MergeSettings;
+  /** The user's `hr_fusion` setting. Default on, matching the Python config. */
+  hrFusion?: boolean;
+}
+
+/**
+ * The merge half of the Settings page, in engine terms.
+ *
+ * Names match the stored config keys so a consumer can map them without a
+ * lookup table: `merge_mode`, `merge_watch_strategy`, `merge_activity_types`,
+ * `merge_overlap_pct` (as a fraction here), `merge_max_drift_min`.
+ */
+export interface MergeSettings {
+  /** `merge_mode`. Default false in the engine: merging is opt-in per call. */
+  enabled?: boolean;
+  /** `merge_watch_strategy`: merge, replace or describe. Default merge. */
+  watchStrategy?: "merge" | "replace" | "describe";
+  /** `merge_activity_types`. Default ["strength_training"]. */
+  activityTypes?: string[];
+  /** `merge_overlap_pct` as a fraction of 1. Default 0.7. */
+  overlapThreshold?: number;
+  /** `merge_max_drift_min`. Default 20. */
+  maxDriftMinutes?: number;
+  /** User overrides for exercises the built-in mapping table does not cover. */
+  customMappings?: Record<string, [number, number]>;
 }
 
 /** Options for reconcile/retry. */
