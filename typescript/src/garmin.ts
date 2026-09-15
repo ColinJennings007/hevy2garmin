@@ -136,6 +136,65 @@ export async function downloadActivityFit(
   }
 }
 
+/**
+ * The Garmin display name, which the wellness endpoints are keyed by.
+ *
+ * Cached per client: it does not change, and a sync would otherwise fetch the
+ * same profile on every workout.
+ */
+const displayNames = new WeakMap<GarminClient, string | null>();
+
+export async function getDisplayName(client: GarminClient): Promise<string | null> {
+  if (displayNames.has(client)) return displayNames.get(client) ?? null;
+  let name: string | null = null;
+  try {
+    const profile = await client.connectapi<{ displayName?: string }>(
+      "/userprofile-service/userprofile/profile",
+    );
+    name = profile?.displayName ?? null;
+  } catch {
+    name = null; // best effort: the caller falls back to another HR source
+  }
+  displayNames.set(client, name);
+  return name;
+}
+
+/** One reading from Garmin's daily monitoring feed: [epoch ms, bpm]. */
+export type DailyHeartRateValue = [number, number | null];
+
+/**
+ * Garmin's daily wrist heart rate for a date, as `[epoch_ms, bpm]` pairs.
+ *
+ * This is the coarsest HR source, roughly a reading every couple of minutes,
+ * and the last resort. It is also the only one that covers a workout the watch
+ * never recorded as an activity: the user wore the watch, so the heart rate
+ * exists, it is just not attached to anything.
+ *
+ * Returns an empty list on any failure. HR is an enrichment and must never
+ * break a sync.
+ */
+export async function getDailyHeartRate(
+  client: GarminClient,
+  date: string,
+): Promise<DailyHeartRateValue[]> {
+  const day = String(date).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const who = await getDisplayName(client);
+  if (!who) return [];
+  try {
+    const data = await client.connectapi<{ heartRateValues?: unknown }>(
+      `/wellness-service/wellness/dailyHeartRate/${encodeURIComponent(who)}?date=${day}`,
+    );
+    const values = data?.heartRateValues;
+    if (!Array.isArray(values)) return [];
+    return values.filter(
+      (v): v is DailyHeartRateValue => Array.isArray(v) && v.length >= 2 && typeof v[0] === "number",
+    );
+  } catch {
+    return [];
+  }
+}
+
 async function postJson(client: GarminClient, path: string, body: unknown): Promise<void> {
   const url = `https://connectapi.${client.domain}${path}`;
   const req = () => fetch(url, {

@@ -346,4 +346,30 @@ describe("hr_fusion", () => {
     await syncOneWorkout(deps(gateway({}, []), store(), { cachedHr }), { dryRun: true });
     expect(cachedHr).not.toHaveBeenCalled();
   });
+
+  it("falls back to Garmin's daily monitoring when there is no denser source", async () => {
+    // The last resort, and the only source that covers a workout the watch
+    // never recorded as an activity.
+    const dailyHeartRate = vi.fn(async () => [
+      [START.getTime(), 130],
+      [START.getTime() + 600_000, 130],
+    ] as Array<[number, number | null]>);
+    const r = await syncOneWorkout(deps(gateway({ dailyHeartRate }, []), store()), {
+      dryRun: false,
+      hrFusion: true,
+    });
+    expect(dailyHeartRate).toHaveBeenCalledWith(START.toISOString().slice(0, 10));
+    expect(r.fitStats?.avgHr).toBe(130);
+  });
+
+  it("prefers the host's own cache over the daily feed", async () => {
+    const dailyHeartRate = vi.fn(async () => [] as Array<[number, number | null]>);
+    await syncOneWorkout(
+      deps(gateway({ dailyHeartRate }, []), store(), {
+        cachedHr: async () => [{ time: 0, hr: 145 }],
+      }),
+      { dryRun: false, hrFusion: true },
+    );
+    expect(dailyHeartRate).not.toHaveBeenCalled();
+  });
 });
