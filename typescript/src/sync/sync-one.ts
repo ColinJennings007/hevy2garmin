@@ -30,6 +30,7 @@
 import { generateFit, type FitResult, type HevyWorkout as FitWorkout } from "../fit";
 import { filterUnsynced } from "./dedup";
 import { generateDescription } from "./description";
+import { checkGracePeriod, DEFAULT_GRACE_MINUTES } from "./grace";
 import type { SyncDeps } from "./gateway";
 import type {
   CandidateWorkout,
@@ -101,6 +102,8 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
   const dryRun = options.dryRun ?? true; // SAFE DEFAULT
   const descriptionEnabled = options.descriptionEnabled ?? true;
   const targetHevyId = options.targetHevyId;
+  const respectGrace = options.respectGrace ?? false;
+  const graceMinutes = options.graceMinutes ?? DEFAULT_GRACE_MINUTES;
   const { store } = deps;
 
   // 1) Fetch the Hevy list + the dedup id-sets, then pick the next unsynced
@@ -127,6 +130,17 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
     return {
       ...emptyResult(dryRun, "already_synced", remaining),
       status: "skipped",
+      workout: workoutView(workout),
+    };
+  }
+
+  // The grace period. Checked before any Garmin call: a workout this new is one
+  // whose watch activity may still be on the user's wrist, and uploading now is
+  // what creates the duplicate the merge path exists to avoid.
+  if (respectGrace && checkGracePeriod(workout, graceMinutes).withinGrace) {
+    return {
+      ...emptyResult(dryRun, "within_grace", remaining),
+      status: "deferred",
       workout: workoutView(workout),
     };
   }
