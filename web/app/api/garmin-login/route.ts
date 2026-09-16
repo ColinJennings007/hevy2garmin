@@ -3,6 +3,7 @@ import { workerLogin } from "@/lib/garmin-login-worker";
 import { toResponse } from "@/lib/garmin-login-response";
 import { cooldownRemaining, formatCooldown } from "@/lib/garmin-cooldown";
 import { getDb } from "@/lib/db";
+import { resolveDatabaseUrl } from "@/lib/database-url";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,5 +62,5 @@ export async function POST(request: Request) {
   }
 
   const result = await workerLogin(email, password);
-  return toResponse(process.env.DATABASE_URL, result);
+  return toResponse(resolveDatabaseUrl() ?? undefined, result);
 }
