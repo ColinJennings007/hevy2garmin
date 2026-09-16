@@ -70,6 +70,17 @@ export interface SyncOneResult {
   dryRun: boolean;
   /** In dry-run: true when a live run WOULD upload a fresh FIT. */
   wouldUpload: boolean;
+  /**
+   * The user asked for HR fusion, the activity went up, and there was no heart
+   * rate to embed.
+   *
+   * Worth its own signal because it is the one case where a setting the user
+   * turned on silently did nothing, and because Garmin recomputes calories from
+   * the embedded HR. Without it the user sees only the symptom, a calorie
+   * figure that disagrees with the app, and reports that instead (#343).
+   * Mirrors `SyncOneResult.no_hr` at `sync.py:80`.
+   */
+  noHr?: boolean;
   dedupDecision: DedupDecision;
   workout: { hevy_id: string; title: string | null; start_time: string | null } | null;
   fitStats: FitStats | null;

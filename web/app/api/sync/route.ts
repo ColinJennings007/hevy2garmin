@@ -150,6 +150,10 @@ export async function POST(request: Request) {
   // with the workouts that did not sync this time, alongside deferred.
   const totalError = runs.filter((r) => status(r) === "error" || status(r) === "failed").length;
   const totalProcessing = runs.filter((r) => status(r) === "processing").length;
+  // Read off a widened type for the same reason the statuses are compared as
+  // strings: the engine is a separately versioned package and the pinned
+  // `SyncOneResult` does not carry this field yet.
+  const totalNoHr = runs.filter((r) => (r as { noHr?: boolean }).noHr === true).length;
 
   // One row per run, for the dashboard's Sync log. Deferred runs count as
   // skipped: from the panel's point of view a workout that waited is a workout
@@ -173,6 +177,10 @@ export async function POST(request: Request) {
     totalDeferred,
     totalError,
     totalProcessing,
+    // "12 synced" and "12 synced, 4 without heart rate" are different answers,
+    // and only one of them explains the calorie figure the user is about to
+    // question (#343, #601).
+    totalNoHr,
     runs,
   });
 }

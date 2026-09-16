@@ -283,10 +283,19 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       // HR before the activity can be deleted. Switching the toggle off must
       // not become permission to destroy the only recording, so the protection
       // always runs and only the embedding is gated, as in `sync.py`.
-      const found = await hrForSync(workout, hrDeps(deps, gateway), {
-        enabled: true,
-        sourceActivityId: watchActivityId,
-      });
+      const hrOptions = { enabled: true, sourceActivityId: watchActivityId };
+      let found = await hrForSync(workout, hrDeps(deps, gateway), hrOptions);
+
+      // Ask a second time when the first found nothing. Garmin's daily
+      // monitoring feed lags, so a workout that finished recently often has no
+      // readings for its window on the first ask and does on the second. The
+      // grace period makes this MORE likely rather than less, because an
+      // unattended run reaches the workout not long after its window opens.
+      // Python does the same at `sync.py:545-557`.
+      if (!found || !found.length) {
+        found = await hrForSync(workout, hrDeps(deps, gateway), hrOptions);
+      }
+
       hrSamples = hrFusion ? found : null;
     } catch (err) {
       if (!(err instanceof HRBackupError)) throw err;
@@ -548,6 +557,10 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       syncMethod: "upload",
       error: null,
       mergeFallbackReason,
+      // Fusion was on, the activity is up, and there was no HR to put in it.
+      // The user turned this setting on, so the one case where it did nothing
+      // should not be silent (#601).
+      noHr: hrFusion && !(hrSamples && hrSamples.length),
     };
   } catch (err) {
     // Two outcomes that mean opposite things.
