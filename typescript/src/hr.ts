@@ -195,6 +195,16 @@ export interface HrDeps {
   saveBackup?: (hevyId: string, samples: HrPoint[]) => Promise<void>;
   /** The consumer's cached HR for this workout. */
   cachedHr?: (hevyId: string) => Promise<HrPoint[] | null>;
+  /**
+   * Populate that cache. Optional, and best-effort: a failure here must never
+   * cost the caller the heart rate it just found, because the cache is only an
+   * optimisation and the FIT is the thing that matters.
+   *
+   * Without it nothing ever wrote the cache, so `cachedHr` always returned null
+   * and the dashboard's per-workout chart was empty on every real install
+   * (#612).
+   */
+  saveCache?: (hevyId: string, samples: HrPoint[]) => Promise<void>;
   /** Garmin's coarser daily monitoring HR across the workout window. */
   dailyHr?: (start: Date, end: Date) => Promise<HrPoint[] | null>;
 }
@@ -225,6 +235,23 @@ export async function hrForSync(
   const start = toUtcDate(String(workout.start_time ?? workout.startTime ?? ""));
   const end = toUtcDate(String(workout.end_time ?? workout.endTime ?? ""));
 
+  /**
+   * Cache what we found, so the next run can skip the Garmin call and the
+   * dashboard has something to draw.
+   *
+   * Deliberately NOT called for HR that came from the cache. Rewriting it would
+   * refresh `cached_at` on every sync, and that column is handed to the user as
+   * "when this heart rate was fetched", so it would quietly start lying.
+   */
+  const cache = async (samples: HrPoint[]): Promise<void> => {
+    if (!deps.saveCache || !hevyId || !samples.length) return;
+    try {
+      await deps.saveCache(hevyId, samples);
+    } catch {
+      // An optimisation must not cost the caller the HR it is about to embed.
+    }
+  };
+
   try {
     // 1. The watch recording itself, and save it before anything destructive.
     if (options.sourceActivityId != null && deps.fetchActivityFit && start && end) {
@@ -237,6 +264,7 @@ export async function hrForSync(
       }
       if (activityHr.length) {
         if (deps.saveBackup && hevyId) await deps.saveBackup(hevyId, activityHr);
+        await cache(activityHr);
         return mergeHrSources(hevyHr, activityHr) || null;
       }
     }
@@ -244,7 +272,10 @@ export async function hrForSync(
     // 2. A durable backup from an earlier run.
     if (deps.loadBackup && hevyId) {
       const backup = await deps.loadBackup(hevyId);
-      if (backup && backup.length) return mergeHrSources(hevyHr, backup) || null;
+      if (backup && backup.length) {
+        await cache(backup);
+        return mergeHrSources(hevyHr, backup) || null;
+      }
     }
 
     // Nothing secured the watch's HR, and the caller is about to delete it.
@@ -263,7 +294,10 @@ export async function hrForSync(
     // 4. Garmin's daily monitoring feed.
     if (deps.dailyHr && start && end) {
       const daily = await deps.dailyHr(start, end);
-      if (daily && daily.length) return mergeHrSources(hevyHr, daily) || null;
+      if (daily && daily.length) {
+        await cache(daily);
+        return mergeHrSources(hevyHr, daily) || null;
+      }
     }
 
     return hevyHr.length ? hevyHr : null;

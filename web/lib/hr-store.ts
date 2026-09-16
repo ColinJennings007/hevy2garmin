@@ -150,6 +150,29 @@ export async function cachedHr(sql: Sql, hevyId: string): Promise<HrPoint[] | nu
   return out.length ? out : null;
 }
 
+/**
+ * Populate `hr_cache` for a workout.
+ *
+ * Writes BOTH shapes, because the table has two readers that want different
+ * things and neither is wrong. `hr_samples` is the `{time, hr}` series the sync
+ * embeds in a FIT; `samples` is the bare list of readings the dashboard's chart
+ * draws. The demo seed only ever wrote `samples`, which is why the chart worked
+ * on the demo while `cachedHr` returned null even there (#612).
+ */
+export async function saveHrCache(sql: Sql, hevyId: string, samples: HrPoint[]): Promise<void> {
+  if (!hevyId || !samples.length) return;
+  const value = {
+    hr_samples: samples,
+    samples: samples.map((s) => s.hr),
+    interval_s: null,
+  };
+  await sql`
+    INSERT INTO hr_cache (hevy_id, data, cached_at)
+    VALUES (${hevyId}, ${sql.json(value)}, NOW())
+    ON CONFLICT (hevy_id) DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()
+  `;
+}
+
 /** The HR half of `SyncDeps`, bound to one connection and one workout list. */
 export function hrDepsFor(sql: Sql, workoutsById: () => Map<string, HrWorkout>) {
   return {
@@ -159,5 +182,6 @@ export function hrDepsFor(sql: Sql, workoutsById: () => Map<string, HrWorkout>) 
       await saveHrBackup(sql, w, samples, w.id ?? hevyId);
     },
     cachedHr: (hevyId: string) => cachedHr(sql, hevyId),
+    saveCache: (hevyId: string, samples: HrPoint[]) => saveHrCache(sql, hevyId, samples),
   };
 }
