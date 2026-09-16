@@ -27,8 +27,19 @@ export interface GarminGateway {
    * upload that is supposed to take its place.
    */
   findExistingActivity(startTime: string, excludeActivityIds?: Array<number | string> | null): Promise<number | null>;
-  /** WRITE: upload a FIT (bytes); resolve the activity id. */
-  upload(fit: Uint8Array, workoutStart?: string): Promise<UploadResult>;
+  /**
+   * WRITE: upload a FIT (bytes); resolve the activity id.
+   *
+   * `excludeActivityIds` is forwarded to the start-time lookup that resolves
+   * the new activity. On a replace the watch copy shares that start time, so
+   * without it the upload resolves to the id the caller is about to delete and
+   * every later call 404s on a dead activity.
+   */
+  upload(
+    fit: Uint8Array,
+    workoutStart?: string,
+    excludeActivityIds?: Array<number | string> | null,
+  ): Promise<UploadResult>;
   /** WRITE: rename an activity. */
   rename(activityId: number, name: string): Promise<void>;
   /** WRITE: set an activity's description. */
@@ -58,7 +69,7 @@ export interface GarminGateway {
 export function garminGateway(client: GarminClient): GarminGateway {
   return {
     findExistingActivity: (startTime, exclude) => findActivityByStartTime(client, startTime, exclude),
-    upload: (fit, workoutStart) => uploadFit(client, fit, workoutStart),
+    upload: (fit, workoutStart, exclude) => uploadFit(client, fit, workoutStart, exclude),
     rename: (activityId, name) => renameActivity(client, activityId, name),
     describe: (activityId, description) => setDescription(client, activityId, description),
     // Garmin's activity JSON is wider than the matcher reads, so the cast goes
