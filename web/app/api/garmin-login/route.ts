@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { workerLogin } from "@/lib/garmin-login-worker";
 import { toResponse } from "@/lib/garmin-login-response";
+import { cooldownRemaining, formatCooldown } from "@/lib/garmin-cooldown";
+import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,6 +38,26 @@ export async function POST(request: Request) {
       { status: "error", error: "Email and password are required." },
       { status: 400 },
     );
+  }
+
+  // Refuse while Garmin's cooldown is running. The cooldown was being recorded
+  // and never read, so a rate-limited user could press sign in again straight
+  // away, and every attempt deepens Garmin's own timer (#609).
+  try {
+    const remaining = await cooldownRemaining(getDb());
+    if (remaining > 0) {
+      return NextResponse.json(
+        {
+          status: "rate_limited",
+          error: `Garmin rate-limited this account's sign-ins. Try again in ${formatCooldown(remaining)}. Signing in again before then makes the wait longer.`,
+          retry_after_seconds: remaining,
+        },
+        { status: 429 },
+      );
+    }
+  } catch {
+    // No database, or an unreadable row. A cooldown we cannot check must not
+    // block a sign-in that might be the user's only way back in.
   }
 
   const result = await workerLogin(email, password);

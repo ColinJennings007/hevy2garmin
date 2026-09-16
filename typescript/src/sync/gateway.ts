@@ -16,6 +16,7 @@ import {
   type UploadResult,
 } from "../garmin";
 import type { CandidateActivity } from "../merge-match";
+import { createRateLimiter, type RateLimitOptions } from "../rate-limit";
 
 export interface GarminGateway {
   /**
@@ -65,22 +66,35 @@ export interface GarminGateway {
   dailyHeartRate?(date: string): Promise<Array<[number, number | null]>>;
 }
 
-/** The default gateway: thin passthroughs to the package's Garmin functions. */
-export function garminGateway(client: GarminClient): GarminGateway {
+/**
+ * The default gateway: thin passthroughs to the package's Garmin functions,
+ * every one of them paced and backed off.
+ *
+ * The limiter is applied HERE rather than inside each function in `garmin.ts`
+ * for two reasons. It is one place to look, so a new Garmin call cannot be
+ * added without it. And it is the boundary the engine already talks through, so
+ * a consumer that supplies its own gateway keeps control of its own pacing.
+ *
+ * One limiter per gateway, so the spacing is shared across every call in a run
+ * rather than each function keeping its own clock (#599).
+ */
+export function garminGateway(client: GarminClient, options: RateLimitOptions = {}): GarminGateway {
+  const limit = createRateLimiter(options);
   return {
-    findExistingActivity: (startTime, exclude) => findActivityByStartTime(client, startTime, exclude),
-    upload: (fit, workoutStart, exclude) => uploadFit(client, fit, workoutStart, exclude),
-    rename: (activityId, name) => renameActivity(client, activityId, name),
-    describe: (activityId, description) => setDescription(client, activityId, description),
+    findExistingActivity: (startTime, exclude) =>
+      limit(() => findActivityByStartTime(client, startTime, exclude)),
+    upload: (fit, workoutStart, exclude) => limit(() => uploadFit(client, fit, workoutStart, exclude)),
+    rename: (activityId, name) => limit(() => renameActivity(client, activityId, name)),
+    describe: (activityId, description) => limit(() => setDescription(client, activityId, description)),
     // Garmin's activity JSON is wider than the matcher reads, so the cast goes
     // through unknown: the matcher guards every field it touches anyway.
     activitiesByDate: async (s, e) =>
-      (await getActivitiesByDate(client, s, e)) as unknown as CandidateActivity[],
-    exerciseSets: (activityId) => getActivityExerciseSets(client, activityId),
-    putExerciseSets: (activityId, payload) => pushExerciseSets(client, activityId, payload),
-    deleteActivity: (activityId) => deleteActivity(client, activityId),
-    activityFit: (activityId) => downloadActivityFit(client, activityId),
-    dailyHeartRate: (date) => getDailyHeartRate(client, date),
+      (await limit(() => getActivitiesByDate(client, s, e))) as unknown as CandidateActivity[],
+    exerciseSets: (activityId) => limit(() => getActivityExerciseSets(client, activityId)),
+    putExerciseSets: (activityId, payload) => limit(() => pushExerciseSets(client, activityId, payload)),
+    deleteActivity: (activityId) => limit(() => deleteActivity(client, activityId)),
+    activityFit: (activityId) => limit(() => downloadActivityFit(client, activityId)),
+    dailyHeartRate: (date) => limit(() => getDailyHeartRate(client, date)),
   };
 }
 
