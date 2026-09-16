@@ -8,14 +8,35 @@ export class HevyAuthError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Injection points, so tests need not stub globals or actually wait. */
+export interface HevyClientOptions {
+  fetchImpl?: typeof fetch;
+  /** Pause after each call. Defaults to the module's pacing constant. */
+  callDelayMs?: number;
+  /**
+   * Base for the retry backoff, waited as `base * attempt`.
+   *
+   * Injectable because without it the retry path is untestable: the real
+   * backoff totals twenty seconds across five attempts, so any test that
+   * exercises a 429 or a 500 either times out or takes that long.
+   */
+  retryBackoffMs?: number;
+}
+
 export class HevyClient {
   private baseUrl: string;
   private key: string;
+  private fetchImpl: typeof fetch;
+  private callDelayMs: number;
+  private retryBackoffMs: number;
 
-  constructor(apiKey?: string, baseUrl?: string) {
+  constructor(apiKey?: string, baseUrl?: string, opts: HevyClientOptions = {}) {
     this.baseUrl = (baseUrl ?? process.env.HEVY_API_KEY_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     this.key = apiKey ?? process.env.HEVY_API_KEY ?? "";
     if (!this.key) throw new Error("Hevy API key required (apiKey arg or HEVY_API_KEY env).");
+    this.fetchImpl = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+    this.callDelayMs = opts.callDelayMs ?? API_CALL_DELAY_MS;
+    this.retryBackoffMs = opts.retryBackoffMs ?? 2000;
   }
 
   private async get<T = any>(path: string, params?: Record<string, string | number>): Promise<T> {
@@ -24,15 +45,15 @@ export class HevyClient {
     const retryStatus = new Set([429, 500, 502, 503, 504]);
     let res!: Response;
     for (let attempt = 0; attempt < 5; attempt++) {
-      res = await fetch(url, { headers: { "api-key": this.key, "Accept": "application/json" } });
+      res = await this.fetchImpl(url, { headers: { "api-key": this.key, "Accept": "application/json" } });
       if (res.status === 401 || res.status === 403) {
         throw new HevyAuthError("Hevy API key invalid or expired (check Hevy Pro + regenerate at hevy.com/settings).");
       }
-      if (retryStatus.has(res.status)) { await sleep(2000 * (attempt + 1)); continue; }
+      if (retryStatus.has(res.status)) { await sleep(this.retryBackoffMs * (attempt + 1)); continue; }
       break;
     }
     if (!res.ok) throw new Error(`Hevy GET ${path} → ${res.status}`);
-    await sleep(API_CALL_DELAY_MS);
+    await sleep(this.callDelayMs);
     return res.json() as Promise<T>;
   }
 
@@ -47,6 +68,36 @@ export class HevyClient {
     try { return await this.get(`/workouts/${workoutId}`); } catch { return null; }
   }
   /** Fetch all workouts (paginated). */
+  /** One page of routines. Ports `get_routines` at `hevy.py:124`. */
+  async getRoutines(page = 1, pageSize = 10): Promise<{ routines?: any[]; page_count?: number }> {
+    return this.get("/routines", { page, pageSize });
+  }
+
+  /**
+   * Every routine, paginated.
+   *
+   * On the client rather than in the web app on purpose. The web reached this
+   * endpoint directly and so inherited none of what `get` does: no retry, no
+   * pacing, and a 401 surfaced as a bare status code instead of the named error
+   * that carries the fix. It also capped at five pages and returned whatever it
+   * had when a later page failed, so a rate-limited fragment of twelve routines
+   * was indistinguishable from a complete list of four (#606).
+   *
+   * A failure here THROWS. Ports `fetch_all_routines` at `sync.py:899`.
+   */
+  async getAllRoutines(pageSize = 10): Promise<any[]> {
+    const all: any[] = [];
+    let page = 1;
+    for (;;) {
+      const d = await this.getRoutines(page, pageSize);
+      const batch = d.routines ?? [];
+      all.push(...batch);
+      if (!batch.length || (d.page_count != null && page >= d.page_count)) break;
+      page++;
+    }
+    return all;
+  }
+
   async getAllWorkouts(sincePage = 1, pageSize = 10): Promise<any[]> {
     const all: any[] = [];
     let page = sincePage;
