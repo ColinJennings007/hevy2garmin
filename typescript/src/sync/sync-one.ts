@@ -257,6 +257,12 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       return finishMerge(outcome.activityId, outcome.setsPushed ?? 0);
     }
     mergeFallbackReason = outcome.reason ?? null;
+    // The merge was undone because Garmin dropped the exercise names. The
+    // start-time lookup would match the very activity we just restored and skip
+    // the upload, so it is bypassed and the workout gets a real named one.
+    if (outcome.forceFreshUpload) {
+      forceFreshUpload = true;
+    }
     // `replace`: the watch activity is ours to delete, but only after the named
     // upload lands AND its heart rate is secured.
     if (outcome.replaceWatchActivity && outcome.activityId != null) {

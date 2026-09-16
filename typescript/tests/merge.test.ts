@@ -93,12 +93,20 @@ describe("mergeIntoWatchActivity", () => {
     expect(calls[calls.length - 1][1]).toEqual({ exerciseSets: [{ old: true }] });
   });
 
-  it("does not merge into an activity we uploaded ourselves", async () => {
+  it("merges into an activity we uploaded ourselves, and verifies the names stuck", async () => {
+    // It used to refuse outright, which is why re-syncing an edited workout
+    // updated the title and left the sets alone (#597). It now pushes and then
+    // reads back; this fake returns no sets, which reads as "Garmin dropped
+    // them", so the merge is undone and a named upload is requested instead.
     const own = { ...WATCH_ACTIVITY, manufacturer: "DEVELOPMENT" };
     const g = gw({}, [own]);
-    const r = await mergeIntoWatchActivity(g, WORKOUT, { strategy: "merge", now: NOW });
-    expect(r.merged).toBe(false);
-    expect(r.reason).toContain("our own upload");
+    const r = await mergeIntoWatchActivity(g, WORKOUT, {
+      strategy: "merge",
+      now: NOW,
+      verifyDelayMs: 0,
+    });
+    expect(g.putExerciseSets).toHaveBeenCalled();
+    expect(r.forceFreshUpload).toBe(true);
   });
 
   it("reports no match rather than merging into the wrong activity", async () => {
