@@ -11,9 +11,12 @@
  *     nothing, regenerate the FIT from the stored payload and re-upload, then
  *     finalize. A Garmin WRITE — the host gates it behind auth + confirmation.
  */
-import { generateFit, type HevyWorkout as FitWorkout } from "../fit";
 import { toUtcDate } from "../match";
 import { generateDescription } from "./description";
+// One direction only. `sync-one` does not import this module, so recovery may
+// depend on sync and not the reverse. Keeping it that way is what stops the
+// retry growing a second, worse implementation of syncing a workout.
+import { syncOneWorkout } from "./sync-one";
 import type { SyncDeps } from "./gateway";
 import type { PendingRecord, RecoveryOptions, RecoveryResult } from "./types";
 
@@ -253,6 +256,33 @@ export async function reconcilePending(deps: RecoveryDeps, hevyId: string): Prom
   return finalizePending(deps, hevyId);
 }
 
+/**
+ * Phases a retry may act on.
+ *
+ * Only a row Garmin definitively refused. Every other phase means the FIT may
+ * have reached Garmin, and a retry there is how one workout becomes two: the
+ * activity can still be processing, so the existing-activity lookup honestly
+ * answers "nothing there" while the first copy is on its way. Python refuses
+ * the same way at `cli.py:346-349`, before and after reconciling.
+ */
+const RETRYABLE_PHASES = new Set(["failed"]);
+
+/**
+ * Re-sync a workout whose upload was refused.
+ *
+ * Deliberately NOT a second implementation of "sync this workout". It clears
+ * the pending row and then runs the ordinary sync at the workout, so heart
+ * rate, the watch strategy, the user profile, the description setting and the
+ * watch-copy delete all come from the one place they are implemented. Python
+ * does the same thing for the same reason (`cli.py:361-368`), calling
+ * `sync_one_workout` with `force_upload=True`.
+ *
+ * The previous version hand-rolled `generateFit(workout, null)` with no
+ * profile and no merge, so a retried workout came back with no heart rate,
+ * calories computed without it, and a standalone activity instead of the merge
+ * the user asked for. It reported success while being quietly worse than every
+ * other workout they had.
+ */
 export async function retryPending(
   deps: RecoveryDeps,
   hevyId: string,
@@ -265,41 +295,51 @@ export async function retryPending(
   const startTime = startTimeOf(workout);
   if (!workout || !startTime) return { status: "no_payload", garminActivityId: null, error: null };
 
+  if (!RETRYABLE_PHASES.has(pending.phase)) {
+    // Naming reconcile matters. A button that refuses without saying what to do
+    // instead is a wall, and reconcile is the thing that actually resolves an
+    // upload whose outcome is unknown.
+    return {
+      status: "needs_review",
+      garminActivityId: null,
+      error:
+        `not retryable from phase '${pending.phase}': the upload may have reached Garmin. ` +
+        `Reconcile it first, which resolves it without risking a second copy.`,
+    };
+  }
+
   const gateway = await deps.gateway();
 
-  // Never double-upload: if Garmin already has it, complete as matched.
-  const existing = await gateway.findExistingActivity(startTime);
+  // Never double-upload, even from `failed`. Cheap, and the cost of being wrong
+  // is a duplicate the user has to clean up by hand.
+  const existing = await gateway.findExistingActivity(
+    startTime,
+    pending.watch_activity_id ? [pending.watch_activity_id] : null,
+  );
   if (existing != null) {
     await completeMatched(deps, hevyId, pl, existing);
     return { status: "reconciled_synced", garminActivityId: existing, error: null };
   }
 
-  try {
-    const fit = generateFit(workout as unknown as FitWorkout, null);
-    await deps.store.updatePending(hevyId, {
-      phase: "processing",
-      attempt_count: (pending.attempt_count ?? 0) + 1,
-      last_error: null,
-    });
-    const up = await gateway.upload(fit.fit, startTime);
-    const activityId = up.activityId;
-    if (activityId != null) {
-      await gateway.rename(activityId, pl.title ?? "");
-      if (opts.descriptionEnabled !== false) {
-        await gateway.describe(activityId, generateDescription(workout, fit.calories, fit.avg_hr));
-      }
-    }
-    await deps.store.completePending(hevyId, {
-      garminActivityId: activityId != null ? String(activityId) : null,
-      title: pl.title ?? "",
-      calories: fit.calories,
-      avgHr: fit.avg_hr,
-      syncMethod: "upload",
-    });
-    return { status: "synced", garminActivityId: activityId ?? null, error: null };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await deps.store.updatePending(hevyId, { phase: "processing", last_error: message });
-    return { status: "error", garminActivityId: null, error: message };
+  // Free the claim. The row also keeps this workout out of the candidate list,
+  // so the sync below could not see it otherwise.
+  await deps.store.deletePending(hevyId);
+
+  // Feed it the workout we stored rather than re-fetching from Hevy. Python
+  // does the same (`cli.py:357-368`), and it matters for more than the saved
+  // call: Hevy can be down, and the workout can have been edited since, so a
+  // retry would silently sync something other than what failed.
+  const result = await syncOneWorkout(
+    { ...deps, fetchWorkouts: async () => [workout as Record<string, unknown>] } as SyncDeps,
+    { ...opts, targetHevyId: hevyId, dryRun: false },
+  );
+
+  if (result.status === "synced") {
+    return { status: "synced", garminActivityId: result.garminActivityId, error: null };
   }
+  return {
+    status: result.status === "processing" || result.status === "failed" ? result.status : "error",
+    garminActivityId: result.garminActivityId,
+    error: result.error,
+  };
 }

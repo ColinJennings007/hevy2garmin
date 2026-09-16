@@ -76,6 +76,15 @@ describe("reconcilePending", () => {
 });
 
 describe("retryPending", () => {
+  // Retry now acts only on a row Garmin definitively refused. The shared
+  // fixture is in `processing`, which is the phase a retry must NOT touch,
+  // because the FIT may still be in flight (#613). These cases are about what
+  // a retry does once it is allowed to run, so they set the phase that allows
+  // it; the refusal itself is covered in retry.test.ts.
+  beforeEach(() => {
+    store.pending.set("w1", { ...PENDING, phase: "failed" });
+  });
+
   it("Garmin already has it → matched, NEVER uploads", async () => {
     gw.findExistingActivity.mockResolvedValue(4242);
     const r = await retryPending(deps(), "w1");
@@ -98,7 +107,11 @@ describe("retryPending", () => {
   it("upload throws → parks pending with the error, no completion", async () => {
     gw.upload.mockRejectedValue(new Error("Garmin upload failed (500)"));
     const r = await retryPending(deps(), "w1");
-    expect(r.status).toBe("error");
+    // `processing`, not `error`. A retry that fails to upload is in exactly the
+    // same unknown state as any other failed upload, and it now goes through
+    // the same code path, so it reports the same thing. That is the point of
+    // routing the retry through the real sync rather than its own copy.
+    expect(r.status).toBe("processing");
     expect(r.error).toContain("Garmin upload failed");
     expect(store.completePending).not.toHaveBeenCalled();
     expect(store.updatePending).toHaveBeenCalledWith(

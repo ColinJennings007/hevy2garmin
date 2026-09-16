@@ -45,6 +45,12 @@ export function mockGateway() {
     // Empty here because these fixtures are a fresh workout with nothing on
     // Garmin yet, so the uploaded activity is correctly treated as new.
     activitiesByDate: vi.fn(async (_from: string, _to: string) => [] as unknown[]),
+    // The rest of the gateway. A partial fake was fine while the paths under
+    // test never reached these, but retry now runs the real sync, which can.
+    exerciseSets: vi.fn(async (_id: number) => ({ exerciseSets: [] })),
+    putExerciseSets: vi.fn(async (_id: number, _payload: unknown) => {}),
+    deleteActivity: vi.fn(async (_id: number) => {}),
+    activityFit: vi.fn(async (_id: number) => null),
   } satisfies GarminGateway;
 }
 
