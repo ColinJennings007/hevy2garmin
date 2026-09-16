@@ -44,13 +44,25 @@ describe("reconcilePending", () => {
     expect(gatewayFactory).not.toHaveBeenCalled();
   });
 
-  it("Garmin already has it → completes as matched, no upload", async () => {
-    gw.findExistingActivity.mockResolvedValue(4242);
+  it("Garmin already has it → adopts it and finalizes, no upload", async () => {
+    // Reconcile no longer takes the first activity at the right start time.
+    // Adopting means recording an activity as the one we created, so it now
+    // requires an activity we actually made: DEVELOPMENT, strength-shaped, at
+    // the workout's start. Python's reconcile never used a plain start-time
+    // lookup either (`sync.py:254-261`); the loose version could complete a
+    // pending against the user's own watch recording.
+    gw.activitiesByDate.mockResolvedValue([
+      {
+        activityId: 4242,
+        manufacturer: "DEVELOPMENT",
+        activityType: { typeKey: "strength_training" },
+        startTimeGMT: "2026-08-01 10:00:00",
+      },
+    ]);
     const r = await reconcilePending(deps(), "w1");
-    expect(r.status).toBe("reconciled_synced");
     expect(r.garminActivityId).toBe(4242);
     expect(store.completePending).toHaveBeenCalledWith(
-      "w1", expect.objectContaining({ garminActivityId: "4242", syncMethod: "match" }),
+      "w1", expect.objectContaining({ garminActivityId: "4242" }),
     );
     expect(gw.upload).not.toHaveBeenCalled();
   });
