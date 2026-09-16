@@ -80,12 +80,55 @@ export interface MergeOutcome {
  * caller, which already owns uploading and is the only place that knows whether
  * this is a dry run.
  */
+/** Consecutive `exerciseSets` PUT failures before merge stops trying. */
+export const MERGE_MAX_CONSECUTIVE_FAILURES = 3;
+
+/**
+ * The durable state a merge needs, kept deliberately narrow.
+ *
+ * Not a general key-value door onto `app_cache`. The store interface exists so
+ * the engine cannot reach past it, and a general getter would hand every future
+ * caller the ability to write anywhere.
+ *
+ * Every method is optional so a consumer without durable storage still works,
+ * with the guards degrading to what they were before rather than throwing.
+ */
+export interface MergeStore {
+  /** The pre-merge sets, readable on a later run and from another process. */
+  loadMergeBackup?(activityId: number): Promise<Record<string, unknown> | null>;
+  saveMergeBackup?(activityId: number, sets: Record<string, unknown>): Promise<void>;
+  clearMergeBackup?(activityId: number): Promise<void>;
+  /** Consecutive PUT failures, for the circuit breaker. */
+  loadMergeFailures?(): Promise<number>;
+  saveMergeFailures?(count: number): Promise<void>;
+}
+
+export interface MergeDeps {
+  store?: MergeStore;
+}
+
 export async function mergeIntoWatchActivity(
   gateway: GarminGateway,
   workout: TimedWorkout & { exercises?: unknown[] },
   options: MergeOptions = {},
+  deps: MergeDeps = {},
 ): Promise<MergeOutcome> {
   const strategy = options.strategy ?? DEFAULT_WATCH_STRATEGY;
+  const store = deps.store;
+
+  // Checked before anything else, including the activity listing, because the
+  // listing is itself a rate-limited Garmin call and repeating it for every
+  // workout is half of what this guard is for. Python reads it in the same
+  // place (`merge.py:419-422`).
+  if (store?.loadMergeFailures) {
+    const failures = await store.loadMergeFailures().catch(() => 0);
+    if (failures >= MERGE_MAX_CONSECUTIVE_FAILURES) {
+      return {
+        merged: false,
+        reason: `circuit breaker: ${failures} consecutive exerciseSets failures, merge disabled for now`,
+      };
+    }
+  }
 
   const range = mergeSearchRange(workout);
   if (!range) return { merged: false, reason: "workout has no usable start or end time" };
@@ -141,6 +184,15 @@ export async function mergeIntoWatchActivity(
     backup = null; // best effort; the merge does not depend on it
   }
 
+  // Durably, before the PUT. A backup that lives only in this closure covers a
+  // throw from the push and nothing else, and the case that matters is the
+  // process dying between the PUT landing and the restore, which on a
+  // serverless request is an ordinary timeout. Same key shape as Python's
+  // `merge_backup_<id>` so either stack can read the other's (#598).
+  if (backup && store?.saveMergeBackup) {
+    await store.saveMergeBackup(act.activityId, backup).catch(() => {});
+  }
+
   try {
     await pushWithNameFallback((p) => gateway.putExerciseSets(act.activityId, p), payload);
   } catch (e) {
@@ -149,7 +201,16 @@ export async function mergeIntoWatchActivity(
         await gateway.putExerciseSets(act.activityId, backup);
       } catch {
         // Restoring is best effort too; the original error is the one to report.
+        // The durable copy is deliberately LEFT in place here so a later run
+        // can still put the original sets back.
       }
+    }
+    // Only a PUT failure counts toward the breaker. A workout with no matching
+    // activity is an ordinary outcome, and counting it would disable merge for
+    // everyone whose watch simply was not recording.
+    if (store?.saveMergeFailures) {
+      const failures = store.loadMergeFailures ? await store.loadMergeFailures().catch(() => 0) : 0;
+      await store.saveMergeFailures(failures + 1).catch(() => {});
     }
     return {
       merged: false,
@@ -158,6 +219,11 @@ export async function mergeIntoWatchActivity(
       reason: `exerciseSets push failed: ${(e as Error).message}`,
     };
   }
+
+  // The merge landed. Drop the backup, because a stale one is worse than none:
+  // a later restore would put back sets from a merge that has been superseded.
+  if (store?.clearMergeBackup) await store.clearMergeBackup(act.activityId).catch(() => {});
+  if (store?.saveMergeFailures) await store.saveMergeFailures(0).catch(() => {});
 
   return {
     merged: true,

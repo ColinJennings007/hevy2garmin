@@ -252,7 +252,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
   let forceFreshUpload = false;
 
   if (!dryRun && merge.enabled) {
-    const outcome = await mergeIntoWatchActivity(gateway, workout, mergeOptions);
+    const outcome = await mergeIntoWatchActivity(gateway, workout, mergeOptions, { store });
     if (outcome.merged && outcome.activityId != null) {
       return finishMerge(outcome.activityId, outcome.setsPushed ?? 0);
     }
@@ -289,10 +289,12 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       // sets still land, and only the exercise names are lost. Matches the
       // Python fallback, which exists because aborting the sync here was a
       // regression users felt (#244).
-      const inPlace = await mergeIntoWatchActivity(gateway, workout, {
-        ...mergeOptions,
-        strategy: "merge",
-      });
+      const inPlace = await mergeIntoWatchActivity(
+        gateway,
+        workout,
+        { ...mergeOptions, strategy: "merge" },
+        { store },
+      );
       if (inPlace.merged && inPlace.activityId != null) {
         return finishMerge(inPlace.activityId, inPlace.setsPushed ?? 0, err.message);
       }

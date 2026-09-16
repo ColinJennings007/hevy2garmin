@@ -39,4 +39,18 @@ export interface SyncStore {
    * proof that nothing ever ran (#565, #569).
    */
   recordSyncLog?(entry: import("./run-log").SyncLogEntry): Promise<void>;
+
+  /**
+   * Durable state for merge, defined in `./merge` and kept deliberately narrow
+   * rather than as a general key-value door onto the app's storage.
+   *
+   * Optional for the same reason as above, and with the same caveat: a
+   * consumer that omits these keeps working, but its merge backup only lives
+   * as long as the request and its circuit breaker never trips (#585, #598).
+   */
+  loadMergeBackup?(activityId: number): Promise<Record<string, unknown> | null>;
+  saveMergeBackup?(activityId: number, sets: Record<string, unknown>): Promise<void>;
+  clearMergeBackup?(activityId: number): Promise<void>;
+  loadMergeFailures?(): Promise<number>;
+  saveMergeFailures?(count: number): Promise<void>;
 }
