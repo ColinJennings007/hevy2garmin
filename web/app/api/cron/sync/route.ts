@@ -3,6 +3,8 @@ import { syncOneWorkout, type SyncOneResult } from "@/lib/sync-one";
 import { postgresSyncStore } from "@/lib/sync-store";
 import { recordSyncRun } from "hevy2garmin";
 import { getDb } from "@/lib/db";
+import { acquireSyncLock } from "hevy2garmin";
+import { postgresLockBackend } from "@/lib/sync-lock-store";
 import { getGithubPat, getGithubRepo, triggerViaActions } from "@/lib/github";
 
 // Runs the sync at request time — never at build.
@@ -55,6 +57,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: `DB unavailable: ${error}` }, { status: 503 });
   }
 
+  // The scheduled run and a user pressing Sync are the overlap this lock is
+  // actually for. Skipping when it is busy is the right answer for a cron:
+  // the next tick will pick up whatever is left (#604).
+  const lock = await acquireSyncLock({ backend: postgresLockBackend(sql), key: "sync" });
+  if (!lock) {
+    return NextResponse.json({ ok: true, mode: "skipped", reason: "another sync is running", ran: 0 });
+  }
+
   const runs: SyncOneResult[] = [];
   try {
     for (let i = 0; i < CAP; i++) {
@@ -72,6 +82,8 @@ export async function GET(request: Request) {
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error, ran: runs.length }, { status: 500 });
+  } finally {
+    await lock.release();
   }
 
   // Compared as plain strings: the engine is a separately versioned package and

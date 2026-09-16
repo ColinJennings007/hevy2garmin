@@ -3,6 +3,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const syncOneWorkout = vi.fn();
 vi.mock("@/lib/sync-one", () => ({ syncOneWorkout: (...a: unknown[]) => syncOneWorkout(...a) }));
 vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
+// The cron run now takes the sync lock, so a scheduled tick and a user
+// pressing Sync cannot walk the same backlog at once (#604). Stubbed to
+// "nothing in the way" here.
+vi.mock("@/lib/sync-lock-store", () => ({ postgresLockBackend: () => ({}) }));
+vi.mock("hevy2garmin", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  acquireSyncLock: async () => ({ key: "sync", token: "t", release: async () => {} }),
+}));
 
 import { GET } from "./route";
 

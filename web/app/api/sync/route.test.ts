@@ -13,6 +13,19 @@ vi.mock("@/lib/sync-one", () => ({
   syncOneWorkout: (...a: unknown[]) => syncOneWorkout(...a),
 }));
 vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
+// The batch now takes the sync lock and scans for duplicates afterwards. Both
+// are wiring this file does not exercise, so they are stubbed to their
+// "nothing in the way, nothing found" answers (#604, #608).
+vi.mock("@/lib/sync-lock-store", () => ({ postgresLockBackend: () => ({}) }));
+vi.mock("hevy2garmin", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  acquireSyncLock: async () => ({ key: "sync", token: "t", release: async () => {} }),
+}));
+vi.mock("@/lib/garmin-activities", () => ({
+  detectDuplicates: async () => [],
+  garminClient: async () => ({}),
+}));
+vi.mock("@/lib/hevy-sync", () => ({ getHevyClient: async () => ({ getAllWorkouts: async () => [] }) }));
 
 const authEnabled = vi.fn();
 const verifySession = vi.fn();
