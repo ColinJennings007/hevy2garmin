@@ -3,6 +3,7 @@
  * Uses garmin-auth's GarminClient for DI auth. Upload endpoint proven in Phase-0 ST2.
  */
 import { GarminClient, NATIVE_API_USER_AGENT, NATIVE_X_GARMIN_USER_AGENT } from "garmin-auth";
+import { toUtcDate } from "./match";
 
 function nativeHeaders(token: string, extra: Record<string, string> = {}): Record<string, string> {
   return {
@@ -31,6 +32,7 @@ export async function uploadFit(
   client: GarminClient,
   fit: Uint8Array,
   workoutStart?: string,
+  excludeActivityIds?: Array<number | string> | null,
 ): Promise<UploadResult> {
   const url = `https://connectapi.${client.domain}/upload-service/upload/.fit`;
   const fd = new FormData();
@@ -52,19 +54,54 @@ export async function uploadFit(
     if (d.successes?.length) activityId = sanitizeActivityId(d.successes[0].internalId);
   } catch { /* async 202 may have no JSON body */ }
 
-  // Resolve activity id by start time (never grab "most recent" — wrong-activity risk).
+  // Resolve activity id by start time (never grab "most recent" — wrong-activity
+  // risk). The exclusions matter here: on a replace the watch copy sits at the
+  // same start time, so without them this resolves to the activity the caller is
+  // about to delete and every later call 404s on a dead id (#596).
   if (!activityId && workoutStart) {
     for (const wait of [3, 5, 10]) {
       await sleep(wait);
-      activityId = await findActivityByStartTime(client, workoutStart);
+      activityId = await findActivityByStartTime(client, workoutStart, excludeActivityIds);
       if (activityId) break;
     }
   }
   return { uploadId, activityId };
 }
 
+/** Python's `window_minutes` default in `find_activity_by_start_time`. */
+const MATCH_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Activity types this lookup will accept.
+ *
+ * The rule is "reject what is positively something else", not "accept only
+ * strength", and the difference matters. An activity Garmin has not finished
+ * classifying comes back with no `typeKey`, and a strict allow-list would
+ * refuse to match our own fresh upload, so we would upload it again. Matches
+ * `garmin.py:266-268`.
+ *
+ * `merge-match.ts` uses a strict allow-list instead, and that is right there
+ * for the opposite reason: it is choosing a watch activity to merge INTO, and
+ * an unclassified activity is not a safe target to edit.
+ */
+const MATCHABLE_TYPES = new Set(["strength_training", "other"]);
+
+/** YYYY-MM-DD, `days` from `d`, in UTC. */
+function dateOffset(d: Date, days: number): string {
+  return new Date(d.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 /**
  * Find an activity by its start time (matches the uploaded FIT).
+ *
+ * This is layer two of the never-duplicate contract, the question "does Garmin
+ * already have this workout" asked before anything is uploaded. Ported from
+ * `find_activity_by_start_time` in `src/hevy2garmin/garmin.py:232`.
+ *
+ * It searches the workout's own date rather than the most recent activities, so
+ * re-syncing something old still finds it however busy the account is, and it
+ * widens by a day on each side because a late-evening workout can fall on the
+ * next date in GMT.
  *
  * `excludeActivityIds` exists for the replace strategy: the watch activity
  * being replaced sits at the same start time as the workout, so without the
@@ -76,16 +113,27 @@ export async function findActivityByStartTime(
   targetStart: string,
   excludeActivityIds?: Array<number | string> | null,
 ): Promise<number | null> {
-  const acts = await client.connectapi<Array<{ activityId: number; startTimeGMT?: string; startTimeLocal?: string }>>(
-    "/activitylist-service/activities/search/activities?limit=10",
-  );
+  // Through the shared helper, which reads a naive string as UTC. Parsing it
+  // with `new Date` would read it as the machine's LOCAL time while the Garmin
+  // side of the same comparison is UTC, so the two halves would disagree by the
+  // host's offset (#610).
+  const target = toUtcDate(targetStart);
+  if (!target) return null;
+
+  const acts = await getActivitiesByDate(client, dateOffset(target, -1), dateOffset(target, 1));
+
   const excluded = new Set((excludeActivityIds ?? []).map((id) => String(id)));
-  const target = new Date(targetStart.replace(" ", "T")).getTime();
   for (const a of acts) {
-    if (excluded.has(String(a.activityId))) continue;
-    const t = a.startTimeGMT ?? a.startTimeLocal;
-    if (t && Math.abs(new Date(t.replace(" ", "T") + (t.includes("Z") ? "" : "Z")).getTime() - target) < 5 * 60 * 1000) {
-      return a.activityId;
+    const activityId = a.activityId as number | undefined;
+    if (activityId == null || excluded.has(String(activityId))) continue;
+
+    const typeKey = (a.activityType as { typeKey?: string } | undefined)?.typeKey ?? "";
+    if (typeKey && !MATCHABLE_TYPES.has(typeKey)) continue;
+
+    const raw = (a.startTimeGMT ?? a.startTimeLocal) as string | undefined;
+    const started = raw ? toUtcDate(raw) : null;
+    if (started && Math.abs(started.getTime() - target.getTime()) < MATCH_WINDOW_MS) {
+      return activityId;
     }
   }
   return null;

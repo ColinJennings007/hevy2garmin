@@ -409,7 +409,15 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       watch_activity_id: watchActivityId != null ? String(watchActivityId) : null,
     });
 
-    const uploadResult = await gateway.upload(fitResult.fit, startTime);
+    // Exclude the watch copy while resolving the new activity. It shares this
+    // workout's start time, so the lookup would otherwise hand back the id we
+    // are about to delete and the rename, describe and delete would all land on
+    // a dead activity (#596).
+    const uploadResult = await gateway.upload(
+      fitResult.fit,
+      startTime,
+      watchActivityId != null ? [watchActivityId] : null,
+    );
     const activityId = uploadResult.activityId;
 
     // Finalize: rename + describe, then write the terminal row and clear the claim.
