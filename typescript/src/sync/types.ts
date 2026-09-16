@@ -213,12 +213,27 @@ export interface RecoveryResult {
   /**
    * reconciled_synced — Garmin already had it, completed as matched.
    * no_activity — reconcile found nothing on Garmin, pending left in place.
-   * synced — retry re-uploaded successfully.
+   * synced — retry re-uploaded successfully, or finalization completed.
    * not_found — no pending row for this id.
    * no_payload — the pending row has no usable stored workout.
    * error — the retry upload failed (pending parked with the error).
+   * processing — the outcome is still unknown; the row stays parked and a
+   *   later run resumes from its checkpoint. Not a failure, and never a reason
+   *   to re-upload.
+   * needs_review — a person has to look. Used where an automatic choice could
+   *   destroy something or adopt an activity that is not ours.
+   * failed — Garmin refused the import; there is nothing to find.
    */
-  status: "reconciled_synced" | "no_activity" | "synced" | "not_found" | "no_payload" | "error";
+  status:
+    | "reconciled_synced"
+    | "no_activity"
+    | "synced"
+    | "not_found"
+    | "no_payload"
+    | "error"
+    | "processing"
+    | "needs_review"
+    | "failed";
   garminActivityId: number | null;
   error: string | null;
 }
