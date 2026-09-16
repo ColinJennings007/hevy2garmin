@@ -114,4 +114,17 @@ export interface SyncDeps {
   hr?: Omit<import("../hr").HrDeps, "fetchActivityFit"> & {
     fetchActivityFit?: (activityId: number | string) => Promise<Uint8Array | null>;
   };
+  /**
+   * Called after a watch activity has been deleted from Garmin.
+   *
+   * Exists for the intervals.icu cleanup (#586): that original has usually
+   * already synced there, so the named FIT replacing it arrives as a second
+   * copy. Kept as a host-supplied hook rather than the engine reading the
+   * environment, so a consumer embedding this engine configures it or does not,
+   * and the engine stays free of third-party credentials.
+   *
+   * Never awaited for its result and never allowed to throw: the Garmin delete
+   * has already happened, and tidying elsewhere must not fail the sync.
+   */
+  onWatchActivityDeleted?: (activityId: number | string, workoutStart: string) => Promise<void>;
 }

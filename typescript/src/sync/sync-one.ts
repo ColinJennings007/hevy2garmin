@@ -528,6 +528,13 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       if (watchActivityId != null) {
         try {
           await gateway.deleteActivity(watchActivityId);
+          // That copy has usually already reached intervals.icu, where the
+          // named activity replacing it would otherwise show up as a duplicate.
+          // Never allowed to fail the sync: the Garmin delete already happened
+          // and tidying elsewhere is not worth losing it over (#586).
+          if (deps.onWatchActivityDeleted && startTime) {
+            await deps.onWatchActivityDeleted(watchActivityId, startTime).catch(() => {});
+          }
         } catch (e) {
           // Two activities is a worse outcome than one, but it is recoverable
           // and losing the sync is not. Report it and keep the success.
