@@ -43,7 +43,7 @@ function startTimeOf(workout: Record<string, unknown> | undefined): string | nul
   return typeof s === "string" && s ? s : null;
 }
 
-type RecoveryDeps = Pick<SyncDeps, "store" | "gateway">;
+type RecoveryDeps = Pick<SyncDeps, "store" | "gateway" | "onWatchActivityDeleted">;
 
 /** Complete a pending as a matched Garmin activity (no upload). */
 async function completeMatched(deps: RecoveryDeps, hevyId: string, pl: StoredPayload, activityId: number): Promise<void> {
@@ -116,6 +116,13 @@ export async function finalizePending(deps: RecoveryDeps, hevyId: string): Promi
       } else {
         try {
           await gateway.deleteActivity(Number(watchId));
+          // Same cleanup as the happy path. Hanging it off only one of the two
+          // delete sites is how a feature ends up silently not running for
+          // whichever path the user actually took (#586).
+          const workoutStart = startTimeOf(pl.workout);
+          if (deps.onWatchActivityDeleted && workoutStart) {
+            await deps.onWatchActivityDeleted(Number(watchId), workoutStart).catch(() => {});
+          }
         } catch (err) {
           // Count rather than retry for ever. Three failures against a Garmin
           // that keeps refusing is a person's problem, not a loop's.
