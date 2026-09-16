@@ -4,6 +4,10 @@ import { syncOneWorkout, type SyncOneResult } from "@/lib/sync-one";
 import { postgresSyncStore } from "@/lib/sync-store";
 import { recordSyncRun } from "hevy2garmin";
 import { getDb } from "@/lib/db";
+import { acquireSyncLock } from "hevy2garmin";
+import { postgresLockBackend } from "@/lib/sync-lock-store";
+import { detectDuplicates, garminClient } from "@/lib/garmin-activities";
+import { getHevyClient } from "@/lib/hevy-sync";
 import { getGithubPat, getGithubRepo, triggerViaActions } from "@/lib/github";
 import { verifySession, SESSION_COOKIE, authEnabled } from "@/lib/auth";
 
@@ -115,6 +119,26 @@ export async function POST(request: Request) {
     }
   }
 
+  // Take the sync lock for the whole batch. The engine has shipped one since
+  // #570 and nothing called it, so this route, the cron route and the
+  // dashboard's per-workout loop could all run at once, each spending
+  // rate-limited Garmin calls on the same backlog (#604).
+  //
+  // The lock is a courtesy, not a correctness guarantee: `claimPending` is
+  // still what makes a double upload impossible. So a lock we cannot take
+  // reports "already running" rather than failing, and a lock we cannot
+  // release expires on its own.
+  const lock = await acquireSyncLock({
+    backend: postgresLockBackend(sql),
+    key: "sync",
+  });
+  if (!lock) {
+    return NextResponse.json(
+      { error: "A sync is already running. Wait for it to finish, or try again in a few minutes.", runs: [] },
+      { status: 409 },
+    );
+  }
+
   // Live, local/self-hosted: loop the tested single-workout engine.
   const runs: SyncOneResult[] = [];
   try {
@@ -132,6 +156,28 @@ export async function POST(request: Request) {
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error, runs }, { status: 500 });
+  } finally {
+    await lock.release();
+  }
+
+  // Scan for duplicate activities left by past races, the way Python does at
+  // the end of every real run (`sync.py:868-881`). It was only reachable from
+  // a button in Settings, so a user with a duplicate pair had no way to learn
+  // about it unless they went looking (#608). Log-only: nothing is deleted.
+  let duplicates = 0;
+  try {
+    const hevy = await getHevyClient();
+    const raw = (await hevy.getAllWorkouts()) as Array<Record<string, unknown>>;
+    const windows = raw.slice(0, 50).map((w) => ({
+      id: String(w.id),
+      title: (w.title as string | null) ?? null,
+      start_time: (w.start_time as string | null) ?? null,
+      end_time: (w.end_time as string | null) ?? null,
+    }));
+    duplicates = (await detectDuplicates(await garminClient(), windows)).length;
+  } catch {
+    // Best-effort, exactly as in Python: a failed scan must never break a sync
+    // that already succeeded.
   }
 
   // Compared as plain strings on purpose. The engine is a separate npm package
@@ -181,6 +227,9 @@ export async function POST(request: Request) {
     // and only one of them explains the calorie figure the user is about to
     // question (#343, #601).
     totalNoHr,
+    // Log-only: a non-zero count means past races left two Garmin
+    // activities for one workout, and Settings can show which (#608).
+    duplicates,
     runs,
   });
 }
