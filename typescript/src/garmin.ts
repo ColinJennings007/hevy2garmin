@@ -307,7 +307,10 @@ export async function getActivityExerciseSets(
   client: GarminClient,
   activityId: number,
 ): Promise<Record<string, unknown>> {
-  await sleep(1);
+  // The one-second pacing that used to be here now comes from the gateway's
+  // rate limiter, which spaces EVERY Garmin call rather than the two that
+  // happened to have a hand-written sleep (#599). Keeping it as well would
+  // double the wait on this call alone.
   return client.connectapi<Record<string, unknown>>(
     `/activity-service/activity/${activityId}/exerciseSets`,
   );
@@ -331,7 +334,7 @@ export async function pushExerciseSets(
 ): Promise<void> {
   const path = `/activity-service/activity/${activityId}/exerciseSets`;
   const url = `https://connectapi.${client.domain}${path}`;
-  await sleep(1); // manual rate limit, matching the Python
+  // Pacing comes from the gateway's rate limiter now, not a hand-written sleep.
   const req = () => fetch(url, {
     method: "POST",
     headers: nativeHeaders(client.di_token!, {

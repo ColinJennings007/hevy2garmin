@@ -8,5 +8,6 @@ export * from "./match";
 export * from "./muscle-groups";
 export * from "./merge-match";
 export * from "./exercise-strings";
+export * from "./rate-limit";
 export * from "./exercise-sets";
 export * from "./hr";
