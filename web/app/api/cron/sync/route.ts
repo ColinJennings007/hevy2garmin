@@ -64,6 +64,9 @@ export async function GET(request: Request) {
       const r = await syncOneWorkout(sql, { dryRun: false, respectGrace: true });
       if (r.status === "none") break;
       runs.push(r);
+      // Only a hard error stops the run. One refused or unresolved workout must
+      // not cancel the rest of the backlog, which is how the Python loop
+      // behaves at `sync.py:822-833`.
       if (r.status === "error") break;
     }
   } catch (err) {
@@ -71,9 +74,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error, ran: runs.length }, { status: 500 });
   }
 
-  const synced = runs.filter((r) => r.status === "synced").length;
-  const deferred = runs.filter((r) => r.status === "deferred" || r.status === "skipped").length;
-  const failed = runs.filter((r) => r.status === "error").length;
+  // Compared as plain strings: the engine is a separately versioned package and
+  // can report statuses these pinned types do not know yet, so counting by name
+  // keeps an upgrade from dropping workouts out of the tally.
+  const status = (r: SyncOneResult) => r.status as string;
+
+  const synced = runs.filter((r) => status(r) === "synced").length;
+  // `processing` joins deferred and skipped: the upload may have landed, so it
+  // is a workout that did not finish this run, not a failure. `failed` joins
+  // the errors, because Garmin refused the import outright.
+  const deferred = runs.filter(
+    (r) => status(r) === "deferred" || status(r) === "skipped" || status(r) === "processing",
+  ).length;
+  const failed = runs.filter((r) => status(r) === "error" || status(r) === "failed").length;
   await recordSyncRun(postgresSyncStore(sql), { synced, skipped: deferred, failed }, "cron");
   return NextResponse.json({ ok: true, mode: "inline", ran: runs.length, synced });
 }

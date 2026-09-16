@@ -122,24 +122,45 @@ export async function POST(request: Request) {
       const r = await syncOneWorkout(sql, { dryRun: false });
       if (r.status === "none") break; // no candidates left
       runs.push(r);
-      if (r.status === "error") break; // stop the batch on a hard error
+      // Only a hard error stops the batch. A refused import (`failed`) or an
+      // unknown outcome (`processing`) is about that one workout, so the run
+      // carries on and counts it, the way the Python loop does at
+      // `sync.py:822-833`. Stopping on those would let one bad FIT cancel the
+      // rest of the backlog.
+      if (r.status === "error") break;
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error, runs }, { status: 500 });
   }
 
-  const totalSynced = runs.filter((r) => r.status === "synced").length;
-  const totalSkipped = runs.filter((r) => r.status === "skipped").length;
-  const totalDeferred = runs.filter((r) => r.status === "deferred").length;
-  const totalError = runs.filter((r) => r.status === "error").length;
+  // Compared as plain strings on purpose. The engine is a separate npm package
+  // on its own release cycle, so this route can be running against a version
+  // that reports statuses these pinned types have never heard of. Counting them
+  // by name means an engine upgrade cannot silently drop a workout out of every
+  // tally, which is what happened when `failed` and `processing` were added.
+  const status = (r: SyncOneResult) => r.status as string;
+
+  const totalSynced = runs.filter((r) => status(r) === "synced").length;
+  const totalSkipped = runs.filter((r) => status(r) === "skipped").length;
+  const totalDeferred = runs.filter((r) => status(r) === "deferred").length;
+  // `failed` counts with `error`: Garmin refused the import and the workout
+  // needs a person either way. `processing` does not, because the upload may
+  // well have landed and calling that a failure would be a guess. It is counted
+  // with the workouts that did not sync this time, alongside deferred.
+  const totalError = runs.filter((r) => status(r) === "error" || status(r) === "failed").length;
+  const totalProcessing = runs.filter((r) => status(r) === "processing").length;
 
   // One row per run, for the dashboard's Sync log. Deferred runs count as
   // skipped: from the panel's point of view a workout that waited is a workout
   // that did not sync this time. Best effort, and it never throws.
   await recordSyncRun(
     postgresSyncStore(sql),
-    { synced: totalSynced, skipped: totalSkipped + totalDeferred, failed: totalError },
+    {
+      synced: totalSynced,
+      skipped: totalSkipped + totalDeferred + totalProcessing,
+      failed: totalError,
+    },
     "manual",
   );
 
@@ -151,6 +172,7 @@ export async function POST(request: Request) {
     totalSkipped,
     totalDeferred,
     totalError,
+    totalProcessing,
     runs,
   });
 }

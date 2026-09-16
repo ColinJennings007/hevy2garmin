@@ -35,6 +35,10 @@ export function mockGateway() {
     upload: vi.fn(async (_fit: Uint8Array, _start?: string) => ({ uploadId: 99, activityId: 555 as number | null })),
     rename: vi.fn(async (_id: number, _name: string) => {}),
     describe: vi.fn(async (_id: number, _text: string) => {}),
+    // Read before every upload for the pre-upload snapshot, not only for merge.
+    // Empty here because these fixtures are a fresh workout with nothing on
+    // Garmin yet, so the uploaded activity is correctly treated as new.
+    activitiesByDate: vi.fn(async (_from: string, _to: string) => [] as unknown[]),
   } satisfies GarminGateway;
 }
 

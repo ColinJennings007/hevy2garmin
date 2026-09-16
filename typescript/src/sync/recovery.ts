@@ -54,7 +54,14 @@ export async function reconcilePending(deps: RecoveryDeps, hevyId: string): Prom
   if (!startTime) return { status: "no_payload", garminActivityId: null, error: null };
 
   const gateway = await deps.gateway();
-  const existing = await gateway.findExistingActivity(startTime);
+  // Never adopt the watch copy. On a replace it sits at this workout's start
+  // time, so an unexcluded lookup can complete the pending against the user's
+  // own watch recording and file it as our upload. That reads as success and
+  // loses the workout. Excluding pre_upload_ids as well is #589.
+  const existing = await gateway.findExistingActivity(
+    startTime,
+    pending.watch_activity_id ? [pending.watch_activity_id] : null,
+  );
   if (existing != null) {
     await completeMatched(deps, hevyId, pl, existing);
     return { status: "reconciled_synced", garminActivityId: existing, error: null };
