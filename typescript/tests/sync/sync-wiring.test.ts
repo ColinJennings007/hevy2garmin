@@ -109,7 +109,12 @@ describe("merge_mode", () => {
     const g = gateway();
     const s = store();
     const r = await syncOneWorkout(deps(g, s), { dryRun: false, hrFusion: false });
-    expect(g.activitiesByDate).not.toHaveBeenCalled();
+    // The activity list IS read even with merge off, for the pre-upload
+    // snapshot that lets a later reconcile tell our upload from something that
+    // was already there. What "merge off" means is that nothing is merged, so
+    // the assertion is on the merge calls rather than on the listing.
+    expect(g.exerciseSets).not.toHaveBeenCalled();
+    expect(g.putExerciseSets).not.toHaveBeenCalled();
     expect(g.upload).toHaveBeenCalledOnce();
     expect(r.syncMethod).toBe("upload");
   });

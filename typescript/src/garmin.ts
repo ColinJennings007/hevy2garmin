@@ -27,6 +27,22 @@ const sleep = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
 
 export interface UploadResult { uploadId: number | null; activityId: number | null; }
 
+/**
+ * Garmin definitively refused an import without accepting an activity.
+ *
+ * Kept distinct from every other upload error because the two demand opposite
+ * handling. Any other failure means the FIT may have reached Garmin, so the
+ * workout is parked and reconciliation goes looking. This one means there is
+ * nothing on the other side to find, so waiting never helps and the workout
+ * needs a person. Mirrors `GarminUploadRejected` in `garmin.py:23`.
+ */
+export class GarminUploadRejected extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GarminUploadRejected";
+  }
+}
+
 /** Upload a FIT (bytes) to Garmin; resolve the activity id (by start time if needed). */
 export async function uploadFit(
   client: GarminClient,
@@ -47,12 +63,27 @@ export async function uploadFit(
   }
   let uploadId: number | null = null;
   let activityId: number | null = null;
+  let rejection: string | null = null;
   try {
-    const j = (await res.json()) as { detailedImportResult?: { uploadId?: number; successes?: Array<{ internalId?: unknown }> } };
+    const j = (await res.json()) as {
+      detailedImportResult?: {
+        uploadId?: number;
+        successes?: Array<{ internalId?: unknown }>;
+        failures?: unknown[];
+      };
+    };
     const d = j.detailedImportResult ?? {};
     uploadId = d.uploadId ?? null;
     if (d.successes?.length) activityId = sanitizeActivityId(d.successes[0].internalId);
+    // A refusal arrives as HTTP 200 with failures in the body, so this cannot be
+    // read off the status code. Failures alongside an accepted activity are a
+    // partial complaint, not a rejection, which is why all three conditions have
+    // to hold. Mirrors `garmin.py:145-148`.
+    if (d.failures?.length && !activityId && !d.successes?.length) {
+      rejection = JSON.stringify(d.failures).slice(0, 300);
+    }
   } catch { /* async 202 may have no JSON body */ }
+  if (rejection) throw new GarminUploadRejected(`Garmin rejected upload: ${rejection}`);
 
   // Resolve activity id by start time (never grab "most recent" — wrong-activity
   // risk). The exclusions matter here: on a replace the watch copy sits at the
