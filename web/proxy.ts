@@ -103,7 +103,15 @@ function productionRuntime(): boolean {
    serve anything but the setup page, so a public URL is never open by accident. These are the
    only paths a production deploy answers while no password or secret is configured. /api/cron
    carries its own bearer check (#473). */
-const UNCONFIGURED_PATHS = ["/setup", "/login", "/api/login", "/api/logout", "/api/session-epoch", "/api/cron"];
+const UNCONFIGURED_PATHS = [
+  "/setup",
+  "/login",
+  "/api/login",
+  "/api/logout",
+  "/api/session-epoch",
+  "/api/cron",
+  "/api/version",
+];
 function unconfiguredRefusal(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/api/")) {
@@ -145,7 +153,18 @@ async function currentEpoch(origin: string): Promise<number> {
 // /api/cron/* carries a bearer (Vercel Cron, the generated GitHub Actions workflow) and no
 // session cookie; each cron route checks CRON_SECRET itself. Gating it here 401'd every
 // scheduled sync before that check ran (#473).
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout", "/api/session-epoch", "/api/cron"];
+// /api/version is open on purpose (#616). It answers "which build is this deployment
+// running", and whoever asks that is usually someone whose redeploy may not have taken,
+// so gating it made the two states it exists to tell apart both answer 401. It reports a
+// commit of a public repository and reads no database and no credential.
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/login",
+  "/api/logout",
+  "/api/session-epoch",
+  "/api/cron",
+  "/api/version",
+];
 const STATIC_PREFIX = /^\/(_next|favicon|manifest|icons|robots|sitemap)/;
 
 /* Demo mode (#471). Mirrors lib/demo.ts (inlined: the proxy bundler rejects
