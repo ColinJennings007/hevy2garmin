@@ -3,6 +3,7 @@ import { authEnabled, productionRuntime } from "@/lib/auth";
 import { loadGarminConnection, loadHevyConnection, type Connection } from "@/lib/connections";
 import { ConnectHevy } from "@/components/connect-hevy";
 import { ConnectGarmin } from "@/components/connect-garmin";
+import { SetupTimezone } from "@/components/setup-timezone";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -11,10 +12,12 @@ interface SetupData {
   dbConfigured: boolean;
   hevy: Connection;
   garmin: Connection;
+  /** user_profile.timezone, or null when nothing has been chosen yet (#639). */
+  timezone: string | null;
 }
 
 const NONE: Connection = { connected: false, connectedAt: null };
-const EMPTY: SetupData = { dbConfigured: false, hevy: NONE, garmin: NONE };
+const EMPTY: SetupData = { dbConfigured: false, hevy: NONE, garmin: NONE, timezone: null };
 
 async function loadSetup(): Promise<SetupData> {
   let sql: ReturnType<typeof getDb>;
@@ -23,11 +26,19 @@ async function loadSetup(): Promise<SetupData> {
   } catch {
     return EMPTY;
   }
-  const [hevy, garmin] = await Promise.all([
+  const [hevy, garmin, profile] = await Promise.all([
     loadHevyConnection(sql),
     loadGarminConnection(sql),
+    sql`SELECT value FROM app_cache WHERE key = 'user_profile' LIMIT 1`.catch(
+      () => [] as Array<{ value: unknown }>,
+    ),
   ]);
-  return { dbConfigured: true, hevy, garmin };
+  const raw = profile[0]?.value;
+  const tz =
+    raw && typeof raw === "object" && typeof (raw as { timezone?: unknown }).timezone === "string"
+      ? ((raw as { timezone: string }).timezone.trim() || null)
+      : null;
+  return { dbConfigured: true, hevy, garmin, timezone: tz };
 }
 
 function fmtDate(value: string | null): string {
@@ -37,15 +48,29 @@ function fmtDate(value: string | null): string {
   return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function StatusDot({ connected }: { connected: boolean }) {
+/**
+ * `labels` exists because a timezone is not a connection (#639). Reusing this
+ * dot unchanged put "Not connected" under the Timezone heading, which reads as
+ * a broken integration rather than a field nobody has filled in yet.
+ */
+function StatusDot({
+  connected,
+  labels = ["Connected", "Not connected"],
+  tone = "bg-danger",
+}: {
+  connected: boolean;
+  labels?: [string, string];
+  /** A missing timezone is not a failure, so it should not be red like one. */
+  tone?: string;
+}) {
   return (
     <span className="inline-flex items-center gap-2">
       <span
-        className={`inline-block h-2.5 w-2.5 rounded-full ${connected ? "bg-success" : "bg-danger"}`}
+        className={`inline-block h-2.5 w-2.5 rounded-full ${connected ? "bg-success" : tone}`}
         aria-hidden
       />
       <span className={`text-xs ${connected ? "text-success" : "text-text-muted"}`}>
-        {connected ? "Connected" : "Not connected"}
+        {connected ? labels[0] : labels[1]}
       </span>
     </span>
   );
@@ -136,6 +161,17 @@ export default async function SetupPage() {
           </p>
         )}
         <ConnectGarmin connected={garminConnected} />
+      </section>
+
+      {/* Timezone (#639). Last, because it only matters once something can sync,
+          and first-time users should not meet a text field before the two
+          connections that actually gate everything. */}
+      <section className="mt-6 rounded-xl border border-border bg-surface-elevated p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-text">Timezone</h2>
+          <StatusDot connected={data.timezone !== null} labels={["Set", "Not set"]} tone="bg-text-muted" />
+        </div>
+        <SetupTimezone current={data.timezone} />
       </section>
     </main>
   );

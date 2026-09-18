@@ -454,6 +454,15 @@ a specific watch. The destination is always Garmin Connect, so you need a Garmin
 account; the watch brand you wear at the gym doesn't matter. It runs in the
 browser/cloud, not on the watch.
 
+**Every workout appears twice on Strava.**
+This happens when both Hevy and Garmin are connected to Strava. Hevy sends the
+workout to Strava itself, hevy2garmin sends the same workout to Garmin, and
+Garmin forwards it to Strava as well, so Strava receives it from two directions.
+Turn off one of the two connections. Turning off Hevy to Strava is the usual
+choice, because the copy that arrives through Garmin carries the heart rate and
+the exercise names; turning off Garmin to Strava works too if you prefer Hevy's
+own upload. Nothing needs changing in hevy2garmin either way.
+
 **My activity shows the wrong time on Strava.**
 The FIT file and Garmin Connect have the correct time. The problem is the handoff
 to Strava: for uploads that did not come from a real Garmin device, Strava can
