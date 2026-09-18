@@ -201,6 +201,12 @@ export async function proxy(req: NextRequest) {
     if (UNCONFIGURED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return NextResponse.next();
     }
+    // A demo is public on purpose, so the accident #550 guards against cannot
+    // happen here (#634). Every mutating API call was already refused above,
+    // and there are no server actions, so what remains is reads. Without this
+    // the demo sent each visitor to /setup to read instructions for configuring
+    // a deployment they do not own, which is what the README linked to.
+    if (demoMode()) return NextResponse.next();
     return unconfiguredRefusal(req);
   }
   // Let the epoch endpoint through BEFORE reading the epoch, or currentEpoch()

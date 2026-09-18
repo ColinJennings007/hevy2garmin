@@ -228,3 +228,63 @@ describe("proxy: /api/version answers without a session (#616)", () => {
     expect(res.status).toBe(403);
   });
 });
+
+/**
+ * A demo with no password is browsable (#634).
+ *
+ * The public demo had DEMO_MODE set and no password, so the #550 gate refused
+ * every path and redirected each visitor to /setup, where they read
+ * instructions for configuring a deployment they do not own. The README's first
+ * link, "Try the live demo", landed there.
+ *
+ * The two features disagreed. #550 protects a forker's own deployment from
+ * being public by accident, and DEMO_MODE says this one is public on purpose
+ * and already refuses every mutating API call above the auth gate. So the
+ * accident the gate guards against cannot happen here, and the gate was the
+ * only thing standing between a visitor and the product.
+ *
+ * DEMO_MODE therefore opens reads while no password is configured, and nothing
+ * else. It must not weaken a deployment that HAS one, and it must not let a
+ * write through, which is what the last two tests here are for.
+ */
+describe("proxy: DEMO_MODE makes an unconfigured deploy browsable (#634)", () => {
+  beforeEach(() => {
+    delete process.env.H2G_PASSWORD;
+    process.env.DEMO_MODE = "1";
+    vi.stubEnv("VERCEL", "1");
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("serves the dashboard instead of redirecting to /setup", async () => {
+    const res = await proxy(req("/dashboard"));
+    expect(passedThrough(res)).toBe(true);
+  });
+
+  it("serves a read API call", async () => {
+    const res = await proxy(req("/api/workouts"));
+    expect(passedThrough(res)).toBe(true);
+  });
+
+  it("still refuses a write, with the demo's own 403 and not a 401", async () => {
+    // The distinction matters. 401 reads as "sign in and you may", which is
+    // false here, and it is the answer the auth gate would give.
+    const res = await proxy(req("/api/sync-one", {}, "POST"));
+    expect(res.status).toBe(403);
+  });
+
+  it("leaves a deployment with no DEMO_MODE refusing, as #550 asks", async () => {
+    delete process.env.DEMO_MODE;
+    const res = await proxy(req("/dashboard"));
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location") as string).pathname).toBe("/setup");
+  });
+
+  it("is not an auth bypass on a deploy that HAS a password", async () => {
+    // The whole exemption lives inside the no-password branch. A configured
+    // deploy that also sets DEMO_MODE must still send a visitor to /login.
+    process.env.H2G_PASSWORD = "test-pw";
+    const res = await proxy(req("/dashboard"));
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location") as string).pathname).toBe("/login");
+  });
+});
