@@ -185,3 +185,46 @@ describe("proxy: DEMO_MODE refuses every mutating /api method (#471)", () => {
     }
   });
 });
+
+/**
+ * /api/version answers without a session (#616, found while verifying a deploy).
+ *
+ * The endpoint exists to answer one question, which build is this deployment
+ * running, and the person asking it is usually someone whose redeploy may not
+ * have taken. The proxy gated it, so the two states the endpoint was built to
+ * tell apart both returned 401 and it could not do its job. On an unconfigured
+ * production deploy it was unreachable for the same reason, which is the case
+ * where the question matters most.
+ *
+ * It is safe to leave open. It reports a commit sha of a public repository, the
+ * branch and the environment name, and it reads no database and no credential.
+ */
+describe("proxy: /api/version answers without a session (#616)", () => {
+  it("passes through when auth is configured and the caller has no cookie", async () => {
+    const res = await proxy(req("/api/version"));
+    expect(passedThrough(res)).toBe(true);
+  });
+
+  it("passes through on a production deploy with no password set", async () => {
+    delete process.env.H2G_PASSWORD;
+    vi.stubEnv("VERCEL", "1");
+    const res = await proxy(req("/api/version"));
+    expect(passedThrough(res)).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  it("does not open a neighbour by prefix", async () => {
+    // "/api/versions-of-everything" must not inherit this, the same way
+    // /api/cronjobs does not inherit /api/cron.
+    const res = await proxy(req("/api/versions-of-everything"));
+    expect(res.status).toBe(401);
+  });
+
+  it("stays read-only in demo mode", async () => {
+    // The demo guard runs before the auth gate, so a POST here must still be
+    // refused rather than reaching a route because the path is public now.
+    process.env.DEMO_MODE = "1";
+    const res = await proxy(req("/api/version", {}, "POST"));
+    expect(res.status).toBe(403);
+  });
+});
