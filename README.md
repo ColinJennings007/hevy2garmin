@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/hevy2garmin/static/favicon.svg" width="80" height="80" alt="hevy2garmin logo">
+  <img src="docs/logo.svg" width="80" height="80" alt="hevy2garmin logo">
 </p>
 
 <h1 align="center">hevy2garmin</h1>
@@ -42,11 +42,14 @@ Hevy is great for tracking gym workouts but doesn't sync to Garmin. This tool br
 
 ## Screenshots
 
-| Workouts | Mappings |
+| Workouts | Routines |
 |----------|----------|
-| ![Workouts](docs/screenshots/workouts.png) | ![Mappings](docs/screenshots/mappings.png) |
-| **HR Timeline** | **Calorie Breakdown** |
-| ![HR Chart](docs/screenshots/hr-chart.png) | ![Calories](docs/screenshots/calories.png) |
+| ![Workouts](docs/screenshots/workouts.png) | ![Routines](docs/screenshots/routines.png) |
+| **Heart rate timeline** | **Exercise mappings** |
+| ![Heart rate timeline](docs/screenshots/hr-chart.png) | ![Exercise mappings](docs/screenshots/mappings.png) |
+
+These are from the [live demo](https://hevy2garmin-demo.gkos.dev), so they show the
+current dashboard with sample data.
 
 ## Requirements
 
