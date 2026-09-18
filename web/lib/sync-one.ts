@@ -19,6 +19,7 @@
  */
 import {
   garminGateway,
+  intervalsCleanupHook,
   listCandidates as engineListCandidates,
   syncOneWorkout as engineSyncOneWorkout,
   type GarminGateway,
@@ -72,6 +73,16 @@ export function buildSyncDeps(sql: Sql, options: SyncOneOptions = {}): SyncDeps 
       return workouts;
     },
     hr: hrDepsFor(sql, () => seen),
+    // A replace deletes the watch's own copy from Garmin, and that copy has
+    // usually already reached intervals.icu, where our named upload then
+    // arrives as a second one. The hook removes the stale copy. It is null
+    // unless both credentials are set, and undefined rather than a no-op
+    // function makes the engine skip the step outright for everyone else.
+    onWatchActivityDeleted:
+      intervalsCleanupHook({
+        apiKey: process.env.INTERVALS_API_KEY,
+        athleteId: process.env.INTERVALS_ATHLETE_ID,
+      }) ?? undefined,
   };
 }
 
