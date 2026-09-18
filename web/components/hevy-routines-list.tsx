@@ -182,6 +182,8 @@ export function HevyRoutinesList() {
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  // A demo is not a failure, so it must not be phrased as one (#634).
+  const [demo, setDemo] = useState(false);
   const [query, setQuery] = useState("");
   const [bulk, setBulk] = useState<BulkState | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -191,9 +193,10 @@ export function HevyRoutinesList() {
     let alive = true;
     fetch("/api/hevy-routines")
       .then((res) => res.json())
-      .then((d: { routines?: Routine[]; error?: string }) => {
+      .then((d: { routines?: Routine[]; error?: string; demo?: boolean }) => {
         if (!alive) return;
         setRoutines(Array.isArray(d.routines) ? d.routines : []);
+        if (d.demo) setDemo(true);
         if (d.error) setNote(d.error);
         setPhase("ready");
       })
@@ -305,7 +308,11 @@ export function HevyRoutinesList() {
         </div>
       ) : routines.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-          {note ? `Couldn't load routines: ${note}` : "No routines found in Hevy."}
+          {demo
+            ? "The demo is not connected to a Hevy account, so there is nothing live to list here. The routines synced to Garmin are below."
+            : note
+              ? `Couldn't load routines: ${note}`
+              : "No routines found in Hevy."}
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
