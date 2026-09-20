@@ -4,6 +4,7 @@ import { syncOneWorkout } from "@/lib/sync-one";
 import { getDb } from "@/lib/db";
 import { recordSyncRun } from "hevy2garmin";
 import { postgresSyncStore } from "@/lib/sync-store";
+import { tallyForLog } from "@/lib/sync-tally";
 import { verifySession, SESSION_COOKIE, authEnabled } from "@/lib/auth";
 
 // Reads live Hevy + Postgres (and, on the live path, Garmin) at request time.
@@ -72,12 +73,6 @@ function isBatch(request: Request): boolean {
   return q === "1" || q === "true";
 }
 
-function tallyOf(status: unknown): { synced: number; skipped: number; failed: number } {
-  const s = String(status ?? "");
-  if (s === "skipped" || s === "deferred") return { synced: 0, skipped: 1, failed: 0 };
-  if (s === "failed" || s === "needs_review") return { synced: 0, skipped: 0, failed: 1 };
-  return { synced: 1, skipped: 0, failed: 0 };
-}
 
 export async function POST(request: Request) {
   let body: Record<string, unknown> = {};
@@ -115,11 +110,10 @@ export async function POST(request: Request) {
       // The log is an audit trail, not the job. A failure to record must never
       // turn a completed upload into an error the user sees.
       try {
-        await recordSyncRun(
-          postgresSyncStore(sql),
-          tallyOf((result as { status?: unknown }).status),
-          "manual (one)",
-        );
+        // null means nothing happened (no candidate), and a run that did
+        // nothing should not appear in the log at all.
+        const tally = tallyForLog((result as { status?: unknown }).status);
+        if (tally) await recordSyncRun(postgresSyncStore(sql), tally, "manual (one)");
       } catch (logErr) {
         console.error("sync_log write failed:", logErr);
       }

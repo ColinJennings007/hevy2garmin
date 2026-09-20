@@ -180,6 +180,15 @@ describe("a live sync records a run", () => {
     expect(recordSyncRun.mock.calls[0][1]).toEqual({ synced: 0, skipped: 0, failed: 1 });
   });
 
+  it("records NOTHING when there was no candidate", async () => {
+    // Pressing Sync now with everything already synced returns status "none".
+    // The first version of this fix counted every unrecognised status as a
+    // success, so it wrote a false "1 synced" row every time.
+    syncOneWorkout.mockResolvedValue({ ...LIVE, status: "none" });
+    await POST(req("http://h/api/sync-one?live=1"));
+    expect(recordSyncRun).not.toHaveBeenCalled();
+  });
+
   it("records NOTHING for a preview, which is not a sync", async () => {
     // sync-panel's Preview hits the same route without live=1. Logging it would
     // fill the panel with runs that never uploaded anything.
