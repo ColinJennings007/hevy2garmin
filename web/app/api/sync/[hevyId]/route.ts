@@ -4,6 +4,7 @@ import { syncOneWorkout } from "@/lib/sync-one";
 import { getDb } from "@/lib/db";
 import { recordSyncRun } from "hevy2garmin";
 import { postgresSyncStore } from "@/lib/sync-store";
+import { tallyForLog } from "@/lib/sync-tally";
 import { verifySession, SESSION_COOKIE, authEnabled } from "@/lib/auth";
 
 // Reads live Hevy + Postgres (and, on the live path, Garmin) at request time.
@@ -83,14 +84,8 @@ export async function POST(
       // a manual sync and has to leave a trace. Recorded here rather than in
       // candidates-list.tsx, because a component can forget and a route cannot.
       try {
-        const st = String((result as { status?: unknown }).status ?? "");
-        const tally =
-          st === "skipped" || st === "deferred"
-            ? { synced: 0, skipped: 1, failed: 0 }
-            : st === "failed" || st === "needs_review"
-              ? { synced: 0, skipped: 0, failed: 1 }
-              : { synced: 1, skipped: 0, failed: 0 };
-        await recordSyncRun(postgresSyncStore(sql), tally, "manual (one)");
+        const tally = tallyForLog((result as { status?: unknown }).status);
+        if (tally) await recordSyncRun(postgresSyncStore(sql), tally, "manual (one)");
       } catch (logErr) {
         console.error("sync_log write failed:", logErr);
       }
