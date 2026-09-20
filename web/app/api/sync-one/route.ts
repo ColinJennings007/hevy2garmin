@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { syncOneWorkout } from "@/lib/sync-one";
 import { getDb } from "@/lib/db";
+import { recordSyncRun } from "hevy2garmin";
+import { postgresSyncStore } from "@/lib/sync-store";
 import { verifySession, SESSION_COOKIE, authEnabled } from "@/lib/auth";
 
 // Reads live Hevy + Postgres (and, on the live path, Garmin) at request time.
@@ -50,6 +52,33 @@ function wantsLive(request: Request, body: Record<string, unknown>): boolean {
   return b === 1 || b === true || b === "1" || b === "true";
 }
 
+
+/**
+ * One sync_log row per live sync, written HERE rather than by the button that
+ * asked for it (#611, reopened after a third report on r/Hevy).
+ *
+ * The writer used to live in sync-loop.tsx, so only "Sync all" recorded
+ * anything. "Sync now" on the dashboard and the per-workout button both synced
+ * correctly and logged nothing, and an empty History panel is indistinguishable
+ * from a sync that never ran. Twice the fix wired one more caller and declared
+ * the feature done. A route is the one place every caller has to pass through.
+ *
+ * `?batch=1` opts out for sync-loop, which drives this route once per workout
+ * and posts its own totals to /api/sync-run. Without it a ten-workout run would
+ * write eleven rows.
+ */
+function isBatch(request: Request): boolean {
+  const q = new URL(request.url).searchParams.get("batch");
+  return q === "1" || q === "true";
+}
+
+function tallyOf(status: unknown): { synced: number; skipped: number; failed: number } {
+  const s = String(status ?? "");
+  if (s === "skipped" || s === "deferred") return { synced: 0, skipped: 1, failed: 0 };
+  if (s === "failed" || s === "needs_review") return { synced: 0, skipped: 0, failed: 1 };
+  return { synced: 1, skipped: 0, failed: 0 };
+}
+
 export async function POST(request: Request) {
   let body: Record<string, unknown> = {};
   try {
@@ -82,6 +111,19 @@ export async function POST(request: Request) {
 
   try {
     const result = await syncOneWorkout(sql, { dryRun });
+    if (!dryRun && !isBatch(request)) {
+      // The log is an audit trail, not the job. A failure to record must never
+      // turn a completed upload into an error the user sees.
+      try {
+        await recordSyncRun(
+          postgresSyncStore(sql),
+          tallyOf((result as { status?: unknown }).status),
+          "manual (one)",
+        );
+      } catch (logErr) {
+        console.error("sync_log write failed:", logErr);
+      }
+    }
     return NextResponse.json(result);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

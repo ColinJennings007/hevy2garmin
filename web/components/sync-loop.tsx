@@ -68,7 +68,9 @@ export function SyncLoop({ ready }: { ready: boolean }) {
         let httpStatus = 0;
         let result: SyncOneLike = {};
         try {
-          const res = await fetch("/api/sync-one?live=1", {
+          // batch=1: this loop posts ONE aggregate row to /api/sync-run when it
+          // finishes, so the route must not also write a row per workout.
+          const res = await fetch("/api/sync-one?live=1&batch=1", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ live: 1 }),
