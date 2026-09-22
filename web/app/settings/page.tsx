@@ -31,7 +31,7 @@ interface SettingsData {
 const EMPTY: SettingsData = { dbConfigured: false, platforms: [], config: [], syncedCount: 0 };
 
 // The user-editable config the Python app persists to app_cache (config.py).
-const CONFIG_KEYS = ["user_profile", "timing", "hr_fusion", "merge_settings", "auto_sync"];
+const CONFIG_KEYS = ["user_profile", "timing", "hr_fusion", "merge_settings", "auto_sync", "sync_window"];
 
 async function loadSettings(): Promise<SettingsData> {
   let sql: ReturnType<typeof getDb>;
@@ -130,6 +130,7 @@ export default async function SettingsPage() {
   const merge = cfg("merge_settings");
   const profile = cfg("user_profile");
   const timing = cfg("timing");
+  const syncWindow = cfg("sync_window");
   const numOrNull = (v: unknown): number | null => (v == null || v === "" ? null : Number(v));
 
   return (
@@ -209,6 +210,7 @@ export default async function SettingsPage() {
           sex={profile.sex != null ? String(profile.sex) : null}
           vo2max={numOrNull(profile.vo2max)}
           timezone={profile.timezone != null ? String(profile.timezone) : null}
+          syncStartDate={syncWindow.start_date != null ? String(syncWindow.start_date) : null}
           mergeMode={Boolean(merge.merge_mode)}
           descriptionEnabled={Boolean(merge.description_enabled)}
           mergeOverlapPct={numOrNull(merge.merge_overlap_pct)}

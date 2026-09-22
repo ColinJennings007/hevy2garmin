@@ -27,6 +27,8 @@ interface Props {
   warmupSetSeconds: number | null;
   restBetweenSetsSeconds: number | null;
   restBetweenExercisesSeconds: number | null;
+  /** Workouts that finished before this are never sync candidates (#647). */
+  syncStartDate: string | null;
 }
 
 const INTERVALS = [30, 60, 120, 240, 360, 720, 1440];
@@ -94,6 +96,7 @@ export function SettingsForm(p: Props) {
   const [sex, setSex] = useState(p.sex ?? "male");
   const [vo2max, setVo2max] = useState(p.vo2max != null ? String(p.vo2max) : "");
   const [timezone, setTimezone] = useState(p.timezone ?? "");
+  const [syncStartDate, setSyncStartDate] = useState(p.syncStartDate ?? "");
   const [mergeMode, setMergeMode] = useState(p.mergeMode);
   const [descEnabled, setDescEnabled] = useState(p.descriptionEnabled);
   const [overlap, setOverlap] = useState(p.mergeOverlapPct != null ? String(p.mergeOverlapPct) : "70");
@@ -145,6 +148,9 @@ export function SettingsForm(p: Props) {
           merge_activity_types: ["strength_training", ...extras],
         },
         user_profile: profile,
+        // Sent even when blank: clearing it is how the older workouts come back
+        // as candidates, so an empty string has to reach the server.
+        sync_window: { start_date: syncStartDate.trim() },
         timing: {
           working_set_seconds: numOrUndef(workingSet) ?? 40,
           warmup_set_seconds: numOrUndef(warmupSet) ?? 25,
@@ -233,6 +239,14 @@ export function SettingsForm(p: Props) {
             ))}
           </datalist>
           <p className="mt-1.5 text-xs text-text-muted">Stamps local time into the FIT so Strava shows the correct workout time.</p>
+        </div>
+        <div className={`${cardCls} mt-4`}>
+          <label className={labelCls} htmlFor="sf-start-date">Sync workouts from</label>
+          <input id="sf-start-date" type="date" value={syncStartDate} onChange={(e) => setSyncStartDate(e.target.value)} className={controlCls} />
+          <p className="mt-1.5 text-xs text-text-muted">
+            Workouts finished before this date are never offered for sync. Useful if you logged
+            older sessions in Garmin by hand. Leave it empty to consider your whole Hevy history.
+          </p>
         </div>
         <button type="button" onClick={() => setShowCalc((v) => !v)} className="mt-2 text-xs text-teal underline">
           {showCalc ? "Hide" : "How are calories calculated?"}
