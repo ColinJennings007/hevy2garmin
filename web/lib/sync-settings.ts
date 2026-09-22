@@ -158,3 +158,18 @@ export async function loadSyncSettings(sql: Sql): Promise<SyncSettings> {
     profile,
   };
 }
+
+
+/**
+ * The sync start date, or null when the user has not set one (#647).
+ *
+ * Deliberately NOT part of SyncSettings. That object describes how a workout is
+ * turned into a Garmin activity, and this decides which workouts are offered at
+ * all. Mixing them would push a candidate-selection concern into the engine,
+ * which would then need a package release to change.
+ */
+export async function loadSyncStartDate(sql: Sql): Promise<string | null> {
+  const cfg = await readConfig(sql, "sync_window");
+  const v = cfg?.start_date;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
