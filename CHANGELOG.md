@@ -18,6 +18,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A routine synced to Garmin shows identical consecutive sets as one repeat block ("3 sets"), as Garmin's own editor builds them, instead of one step per set. Sets that differ (a warmup, a changed weight or rep count) stay separate steps. Routines already on Garmin are re-created in the new form on the next routine sync (#727).
 - The web app saves the Garmin tokens after every refresh. Garmin rotates the refresh token on each one, and the cached client's refreshes on a 401 stayed in memory, so the next restart loaded a replaced refresh token and the login was lost. The fix is in garmin-auth 0.8.0, which the web app now uses (#721).
 - The sync cron and the dashboard's batch sync stop when the engine hands back a workout the run already handled. A deferred workout stays pending, so the loop used to repeat it up to its cap of 50: a cron tick inside the grace period ran 50 identical passes, each fetching the Hevy list (#723).
 - A sync that merged into a watch activity failed with "Invalid time value" (shown as "Something went wrong during the sync.") when the Timing settings were never saved. The settings loader passed `undefined` for each unsaved value, which replaced the default set time with NaN. It now passes only saved values, and the engine ignores any timing value that is not a number (#703).
