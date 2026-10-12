@@ -294,12 +294,19 @@ export interface MarkSyncedOpts {
   avgHr?: number | null;
   hevyUpdatedAt?: string | null;
   syncMethod?: string;
+  /** A resync of an already-synced workout: keep synced_at, set resynced_at (#709). */
+  resync?: boolean;
 }
 
 /**
  * Record a workout as terminally synced (status='success') in synced_workouts.
  * Mirrors db_postgres.mark_synced(): UPSERT on hevy_id, always setting
  * status='success' and synced_at=NOW().
+ *
+ * Except for a resync, which rewrites a row that is already there. The pages
+ * date and sort rows by synced_at, so a resync keeps it and sets resynced_at
+ * instead (#709). A resync that finds no row is a first sync and inserts one
+ * like any other, with no resynced_at.
  *
  * This is a LOCAL ledger write only — it does NOT upload to Garmin. The caller
  * (sync-one) invokes it AFTER a real Garmin upload has already landed, to record
@@ -316,6 +323,25 @@ export async function markSynced(
   const avgHr = opts.avgHr ?? null;
   const hevyUpdatedAt = opts.hevyUpdatedAt ?? null;
   const syncMethod = opts.syncMethod ?? "upload";
+  // Two statements rather than one with a conditional SET, because the Sql
+  // tag here has no fragments. They differ only in the last line.
+  if (opts.resync) {
+    await sql`
+      INSERT INTO synced_workouts
+        (hevy_id, garmin_activity_id, title, calories, avg_hr, hevy_updated_at, sync_method, status)
+      VALUES (${hevyId}, ${garminId}, ${title}, ${calories}, ${avgHr}, ${hevyUpdatedAt}, ${syncMethod}, 'success')
+      ON CONFLICT (hevy_id) DO UPDATE SET
+        garmin_activity_id = EXCLUDED.garmin_activity_id,
+        title = EXCLUDED.title,
+        calories = EXCLUDED.calories,
+        avg_hr = EXCLUDED.avg_hr,
+        hevy_updated_at = EXCLUDED.hevy_updated_at,
+        sync_method = EXCLUDED.sync_method,
+        status = 'success',
+        resynced_at = NOW()
+    `;
+    return;
+  }
   await sql`
     INSERT INTO synced_workouts
       (hevy_id, garmin_activity_id, title, calories, avg_hr, hevy_updated_at, sync_method, status)
