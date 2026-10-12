@@ -156,6 +156,13 @@ export interface MarkSyncedOpts {
   avgHr?: number | null;
   hevyUpdatedAt?: string | null;
   syncMethod?: string;
+  /**
+   * The write is a resync of a workout that is already synced (#709). The
+   * store keeps the row's original sync time, which the dashboard dates and
+   * sorts the row by, and records when it was resynced instead. Set only by
+   * the `targetActivityId` path; every other write leaves it out.
+   */
+  resync?: boolean;
 }
 
 /** Options controlling syncOneWorkout. dryRun defaults to TRUE (safe). */

@@ -295,6 +295,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       syncMethod = "merge",
       decision = "existing_garmin_activity",
       hrSamples = null,
+      resync = false,
     }: {
       setsPushed: number;
       fallbackReason?: string | null;
@@ -302,6 +303,8 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       decision?: DedupDecision;
       /** HR to compute the calories and average from, as a normal sync's FIT would. */
       hrSamples?: HrPoint[] | null;
+      /** Tells the store this rewrites an existing row, so it keeps the sync time. */
+      resync?: boolean;
     },
   ): Promise<SyncOneResult> {
     const stats = fitStatsOf(generateFit(picked as unknown as FitWorkout, hrSamples, { profile }));
@@ -316,6 +319,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       avgHr: stats.avgHr,
       hevyUpdatedAt: (picked.updated_at as string | null) ?? null,
       syncMethod,
+      ...(resync ? { resync: true } : {}),
     });
     return {
       status: "synced",
@@ -435,6 +439,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       syncMethod,
       decision: "stored_activity",
       hrSamples,
+      resync: true,
     });
   }
 
