@@ -327,3 +327,43 @@ export async function unscheduleRoutine(
     return { status: "error", error };
   }
 }
+
+export interface RoutineRemoveResult {
+  status: "removed" | "error";
+  error: string | null;
+}
+
+/**
+ * Remove a synced routine: delete its planned workout on Garmin and its rows here
+ * (#733). A 404 from Garmin means the workout is already gone, often deleted in
+ * Garmin Connect, so the local rows are removed anyway. Garmin deletes a workout's
+ * calendar entries with it, so the routine's schedule rows go too. Any other
+ * failure keeps everything, so a removal never leaves Garmin with a workout the
+ * page no longer lists.
+ */
+export async function removeRoutine(
+  hevyRoutineId: string,
+  sql: Sql = getDb(),
+  opts: { garminClientFactory?: () => Promise<GarminClient> } = {},
+): Promise<RoutineRemoveResult> {
+  try {
+    const rows = (await sql`
+      SELECT garmin_workout_id FROM synced_routines WHERE hevy_routine_id = ${hevyRoutineId} LIMIT 1
+    `) as Array<{ garmin_workout_id: string | null }>;
+    const workoutId = rows[0]?.garmin_workout_id ?? null;
+    if (workoutId != null) {
+      const client = await (opts.garminClientFactory ?? (() => getGarminClient()))();
+      try {
+        await deleteGarminWorkout(client, workoutId);
+      } catch (err) {
+        if (!(err instanceof GarminDeleteError && err.status === 404)) throw err;
+      }
+    }
+    await sql`DELETE FROM routine_schedules WHERE hevy_routine_id = ${hevyRoutineId}`;
+    await sql`DELETE FROM synced_routines WHERE hevy_routine_id = ${hevyRoutineId}`;
+    return { status: "removed", error: null };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return { status: "error", error };
+  }
+}

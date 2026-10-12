@@ -57,7 +57,7 @@ export function RoutineSchedules({
       {items.map((e) => (
         <span
           key={e.scheduleId}
-          className="inline-flex items-center gap-1 rounded-full bg-teal/15 px-2 py-0.5 text-xs font-medium text-teal"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-teal/15 px-2 py-0.5 text-xs font-medium text-teal"
         >
           {e.date}
           <button
