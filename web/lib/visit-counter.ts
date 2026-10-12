@@ -1,11 +1,12 @@
 /**
- * Optional visit counter.
+ * Optional visit counter and error reports.
  *
  * With COLLECTOR_URL and COLLECTOR_TOKEN both set, each page view is posted in the
  * background to {COLLECTOR_URL}/collect: the page name (COLLECTOR_PAGE, or the request
  * host), the referrer, the user agent and the client IP. It never changes the response,
  * gives up after 1.5 s, and without both variables it does nothing at all, so a fork or
- * a self-hosted copy sends nothing anywhere.
+ * a self-hosted copy sends nothing anywhere. The same collector can also receive the errors
+ * visitors' browsers hit (clientErrorScript and forwardClientError below).
  */
 
 /** Some collectors sit behind Cloudflare, which refuses the runtime's default user agent. */
@@ -71,4 +72,76 @@ export function countVisit(
   );
   event?.waitUntil(send);
   return send;
+}
+
+/**
+ * The inline script for the root layout. It sends an uncaught error or an unhandled rejection
+ * to this site's own `endpoint` with `navigator.sendBeacon`, at most 5 a page view. The route
+ * there forwards it only when a collector is configured, so the token never reaches a browser.
+ */
+export function clientErrorScript(endpoint = "/api/client-error"): string {
+  return `(function () {
+  var sent = 0;
+  function report(message, source) {
+    if (sent >= 5 || !navigator.sendBeacon) return;
+    sent++;
+    try {
+      navigator.sendBeacon(${JSON.stringify(endpoint)}, JSON.stringify({
+        message: String(message || "unknown error").slice(0, 300),
+        source: String(source || location.pathname).slice(0, 250)
+      }));
+    } catch (e) {}
+  }
+  window.addEventListener("error", function (e) {
+    if (e.message) report(e.message, (e.filename || location.pathname) + ":" + (e.lineno || 0));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason;
+    report("unhandled rejection: " + ((r && r.message) || r), location.pathname);
+  });
+})();`;
+}
+
+/**
+ * Forward one error report from the page to `{COLLECTOR_URL}/collect` as `kind: "error"`.
+ * Sends nothing when no collector is configured, the body is not JSON, or the message is
+ * empty. Never throws.
+ */
+export async function forwardClientError(
+  req: Request,
+  env: Env = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const url = env.COLLECTOR_URL?.trim();
+  const token = env.COLLECTOR_TOKEN?.trim();
+  if (!url || !token) return;
+  let report: { message?: unknown; source?: unknown };
+  try {
+    // sendBeacon posts a string as text/plain, so read text and parse it.
+    report = JSON.parse(await req.text());
+  } catch {
+    return;
+  }
+  const message = String(report?.message ?? "").slice(0, 300);
+  if (!message) return;
+  const host = req.headers.get("host") ?? new URL(req.url).host;
+  await fetchImpl(`${url.replace(/\/+$/, "")}/collect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": USER_AGENT,
+    },
+    body: JSON.stringify({
+      kind: "error",
+      page: env.COLLECTOR_PAGE?.trim() || host,
+      message,
+      source: String(report?.source ?? "").slice(0, 250),
+      agent: req.headers.get("user-agent") ?? "",
+    }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  }).then(
+    () => undefined,
+    () => undefined,
+  );
 }

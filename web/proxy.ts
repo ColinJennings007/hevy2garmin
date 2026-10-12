@@ -112,6 +112,7 @@ const UNCONFIGURED_PATHS = [
   "/api/session-epoch",
   "/api/cron",
   "/api/version",
+  "/api/client-error",
 ];
 function unconfiguredRefusal(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
@@ -158,6 +159,8 @@ async function currentEpoch(origin: string): Promise<number> {
 // running", and whoever asks that is usually someone whose redeploy may not have taken,
 // so gating it made the two states it exists to tell apart both answer 401. It reports a
 // commit of a public repository and reads no database and no credential.
+// /api/client-error takes the optional error reports from a visitor's browser. It forwards
+// them only when a collector is configured, always answers 204 and reads nothing.
 const PUBLIC_PATHS = [
   "/login",
   "/api/login",
@@ -165,6 +168,7 @@ const PUBLIC_PATHS = [
   "/api/session-epoch",
   "/api/cron",
   "/api/version",
+  "/api/client-error",
 ];
 const STATIC_PREFIX = /^\/(_next|favicon|manifest|icons|robots|sitemap)/;
 
@@ -173,7 +177,7 @@ const STATIC_PREFIX = /^\/(_next|favicon|manifest|icons|robots|sitemap)/;
    every mutating /api call instead of 30 route-level checks, of which exactly
    one existed. Signing in and out stays allowed so the demo can be browsed. */
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const DEMO_ALLOWED = ["/api/login", "/api/logout"];
+const DEMO_ALLOWED = ["/api/login", "/api/logout", "/api/client-error"];
 function demoMode(): boolean {
   const v = (process.env.DEMO_MODE ?? "").trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes" || v === "on";
