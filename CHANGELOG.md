@@ -18,6 +18,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A routine whose workout was deleted in Garmin Connect can be synced again. The sync now asks Garmin before it skips an unchanged routine, and removing a schedule Garmin already deleted removes it here instead of failing with a 404. **Sync to Garmin** on an unchanged routine says it is already on Garmin instead of "Request failed (200)" (#729).
+- A routine workout that is created again (after the routine changed, or after #728) is booked again on the routine's upcoming dates. Garmin deletes a workout's calendar entries with it, and the web sync never booked them again, so the routine left the Garmin calendar while the Routines page still listed its dates. Past dates are dropped, and a date that fails to book is tried again on the next sync (#731).
+- Routine workouts rest after the last set of each exercise too, before the next exercise. Only the last set of the workout has no rest after it (#730).
 - A routine synced to Garmin shows identical consecutive sets as one repeat block ("3 sets"), as Garmin's own editor builds them, instead of one step per set. Sets that differ (a warmup, a changed weight or rep count) stay separate steps. Routines already on Garmin are re-created in the new form on the next routine sync (#727).
 - The web app saves the Garmin tokens after every refresh. Garmin rotates the refresh token on each one, and the cached client's refreshes on a 401 stayed in memory, so the next restart loaded a replaced refresh token and the login was lost. The fix is in garmin-auth 0.8.0, which the web app now uses (#721).
 - The sync cron and the dashboard's batch sync stop when the engine hands back a workout the run already handled. A deferred workout stays pending, so the loop used to repeat it up to its cap of 50: a cron tick inside the grace period ran 50 identical passes, each fetching the Hevy list (#723).
