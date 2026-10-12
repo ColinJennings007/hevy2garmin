@@ -544,3 +544,53 @@ describe("without targetActivityId nothing changes", () => {
     expect(gw.activity).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The store is told a write is a resync, so it can keep the row's original
+ * sync time (#709). Only the resync path says so; every other way a workout
+ * is recorded leaves the flag out entirely.
+ */
+describe("markSynced is told about a resync, and only a resync", () => {
+  const optsOf = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.at(-1)![1] as Record<string, unknown>;
+
+  it("a resync passes resync: true", async () => {
+    const r = await resync({ merge: MERGE });
+    expect(r.status).toBe("synced");
+    expect(optsOf(store.markSynced)).toMatchObject({ resync: true });
+  });
+
+  it("a describe-only resync passes it too", async () => {
+    await resync({ merge: DESCRIBE });
+    expect(optsOf(store.markSynced)).toMatchObject({ resync: true });
+  });
+
+  describe("on the normal paths it is absent", () => {
+    beforeEach(() => {
+      store.syncedIds.clear();
+    });
+    const normal = (options: SyncOneOptions) => resync({ targetActivityId: undefined, ...options });
+
+    it("a match by start time", async () => {
+      gw.findExistingActivity.mockResolvedValue(777);
+      const r = await normal({ merge: PLAIN });
+      expect(r.syncMethod).toBe("match");
+      expect(optsOf(store.markSynced)).not.toHaveProperty("resync");
+    });
+
+    it("a merge into the watch activity", async () => {
+      gw.activitiesByDate.mockResolvedValue([listed({ activityId: 777 })]);
+      const r = await normal({ merge: MERGE });
+      expect(r.syncMethod).toBe("merge");
+      expect(r.garminActivityId).toBe(777);
+      expect(optsOf(store.markSynced)).not.toHaveProperty("resync");
+    });
+
+    it("a fresh upload", async () => {
+      gw.activitiesByDate.mockResolvedValue([]);
+      const r = await normal({ merge: PLAIN });
+      expect(r.syncMethod).toBe("upload");
+      expect(store.markSynced).not.toHaveBeenCalled();
+      expect(optsOf(store.completePending)).not.toHaveProperty("resync");
+    });
+  });
+});

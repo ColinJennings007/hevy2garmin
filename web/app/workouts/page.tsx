@@ -14,6 +14,8 @@ interface WorkoutItem {
   state: string;
   detail: string | null;
   garmin_activity_id: string | null;
+  // Set when a resync rewrote the row; `when` stays the original sync (#709).
+  resynced_at: string | null;
   kind: "terminal" | "pending";
 }
 
@@ -34,7 +36,7 @@ async function loadWorkouts(): Promise<WorkoutsData> {
 
   const [terminal, pending] = await Promise.all([
     sql`
-      SELECT hevy_id, title, synced_at, garmin_activity_id,
+      SELECT hevy_id, title, synced_at, resynced_at, garmin_activity_id,
              COALESCE(status, 'success') AS status
       FROM synced_workouts
       ORDER BY synced_at DESC
@@ -45,6 +47,7 @@ async function loadWorkouts(): Promise<WorkoutsData> {
           hevy_id: string;
           title: string | null;
           synced_at: string | null;
+          resynced_at: string | null;
           garmin_activity_id: string | null;
           status: string;
         }>,
@@ -77,6 +80,7 @@ async function loadWorkouts(): Promise<WorkoutsData> {
     state: p.phase ?? "pending",
     detail: p.last_error ?? p.next_step ?? null,
     garmin_activity_id: p.garmin_activity_id ?? null,
+    resynced_at: null,
     kind: "pending",
   }));
 
@@ -92,6 +96,7 @@ async function loadWorkouts(): Promise<WorkoutsData> {
       state: t.status,
       detail: null,
       garmin_activity_id: t.garmin_activity_id ?? null,
+      resynced_at: t.resynced_at ?? null,
       kind: "terminal",
     }));
 

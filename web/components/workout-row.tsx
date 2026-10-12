@@ -4,11 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 import { canResync, resyncOutcome, type ResyncOutcome } from "@/lib/resync-row";
+import { resyncedLabel } from "@/lib/resynced";
 
 export interface WorkoutItem {
   hevy_id: string;
   title: string | null;
   when: string | null;
+  /** When the row was last resynced; `when` stays the original sync (#709). */
+  resynced_at?: string | null;
   garmin_activity_id: string | null;
   detail?: string | null;
   kind: "terminal" | "pending";
@@ -113,6 +116,7 @@ export function WorkoutRow({
   const canHr = Boolean(item.garmin_activity_id);
   const canResolve = item.kind === "pending";
   const canUnsync = item.kind === "terminal";
+  const resynced = resyncedLabel(item.resynced_at, fmtDate);
 
   async function toggle() {
     const next = !open;
@@ -290,6 +294,12 @@ export function WorkoutRow({
           <div className="truncate text-sm font-medium text-text">{item.title || "Untitled workout"}</div>
           <div className="mt-0.5 text-xs text-text-muted">
             {fmtDate(item.when)}
+            {resynced && (
+              <span className="hidden sm:inline">
+                {" · "}
+                <span className="whitespace-nowrap">{resynced}</span>
+              </span>
+            )}
             {item.garmin_activity_id && (
               <>
                 {" · "}
@@ -316,6 +326,13 @@ export function WorkoutRow({
             </a>
             {item.detail && <span className="text-text-secondary"> · {item.detail}</span>}
           </div>
+          {/* On a narrow screen the note gets its own line rather than
+              lengthening the date line beside the buttons. */}
+          {resynced && (
+            <div className="mt-0.5 text-xs text-text-muted sm:hidden">
+              <span className="whitespace-nowrap">{resynced}</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {canResolve && (

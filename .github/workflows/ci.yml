@@ -353,3 +353,11 @@ jobs:
             *720*) echo "persisted";;
             *) echo "the row is missing or wrong; a 200 was returned without a durable write"; exit 1;;
           esac
+
+      # The store's upserts need a real Postgres, and this job is the one that
+      # has it. Last, so the checks above see the database as the app left it;
+      # the tests delete only the rows they wrote. Without TEST_DATABASE_URL
+      # they skip, so an unset URL fails here rather than passing silently (#709).
+      - name: The store's upserts against real Postgres
+        working-directory: web
+        run: TEST_DATABASE_URL="${DATABASE_URL:?}" npx vitest run lib/pending-store.db.test.ts
