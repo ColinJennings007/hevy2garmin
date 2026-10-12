@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { countVisit, isPageView, visitBody } from "./visit-counter";
+import { clientErrorScript, countVisit, forwardClientError, isPageView, visitBody } from "./visit-counter";
 
 const page = (path = "/dashboard", headers: Record<string, string> = {}, method = "GET") =>
   new Request(`https://app.example${path}`, {
@@ -70,5 +70,61 @@ describe("countVisit", () => {
     expect(countVisit(page("/api/x"), undefined, ENV, f)).toBeNull();
     expect(countVisit(page("/favicon.ico"), undefined, ENV, f)).toBeNull();
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("forwardClientError", () => {
+  const report = (body: string, headers: Record<string, string> = {}) =>
+    new Request("https://app.example/api/client-error", {
+      method: "POST",
+      headers: { "content-type": "text/plain;charset=UTF-8", host: "app.example", ...headers },
+      body,
+    });
+
+  it("forwards an error as kind error with the bearer token", async () => {
+    const f = vi.fn(async () => new Response("ok"));
+    const long = "x".repeat(400);
+    await forwardClientError(
+      report(JSON.stringify({ message: long, source: "/a.js:12" }), { "user-agent": "Mozilla/5.0" }),
+      ENV,
+      f as unknown as typeof fetch,
+    );
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://collect.example/collect");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer t0k", "User-Agent": "estate-collector-client/1.0" });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(String(init.body))).toEqual({
+      kind: "error",
+      page: "app.example",
+      message: "x".repeat(300),
+      source: "/a.js:12",
+      agent: "Mozilla/5.0",
+    });
+  });
+
+  it("sends nothing without both variables, for a body that is not JSON, or for an empty message", async () => {
+    const f = vi.fn(async () => new Response("ok"));
+    const fetchImpl = f as unknown as typeof fetch;
+    await forwardClientError(report('{"message":"boom"}'), {}, fetchImpl);
+    await forwardClientError(report('{"message":"boom"}'), { COLLECTOR_URL: ENV.COLLECTOR_URL }, fetchImpl);
+    await forwardClientError(report("not json"), ENV, fetchImpl);
+    await forwardClientError(report('{"message":""}'), ENV, fetchImpl);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("never rejects when the collector is down", async () => {
+    const f = vi.fn(async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    await expect(forwardClientError(report('{"message":"boom"}'), ENV, f as unknown as typeof fetch)).resolves.toBeUndefined();
+  });
+});
+
+describe("clientErrorScript", () => {
+  it("is valid JavaScript that beacons to the given endpoint", () => {
+    const js = clientErrorScript("/base/api/client-error");
+    expect(() => new Function(js)).not.toThrow();
+    expect(js).toContain('"/base/api/client-error"');
+    expect(js).toContain("sent >= 5");
   });
 });
