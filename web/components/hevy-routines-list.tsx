@@ -13,12 +13,20 @@ interface Routine {
 const btn =
   "rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50";
 
-function RoutineRow({ r }: { r: Routine }) {
+function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<null | "sync" | "schedule">(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [synced, setSynced] = useState(false);
+  // Starts from the server's synced table, so a routine already on Garmin still
+  // reads "Re-sync" after a refresh (#735). When the server's answer changes (a
+  // sync elsewhere, a Remove), the row follows it.
+  const [synced, setSynced] = useState(onGarmin);
+  const [serverSynced, setServerSynced] = useState(onGarmin);
+  if (serverSynced !== onGarmin) {
+    setServerSynced(onGarmin);
+    setSynced(onGarmin);
+  }
   const [showSchedule, setShowSchedule] = useState(false);
   const [date, setDate] = useState("");
   const [recurring, setRecurring] = useState(false);
@@ -85,6 +93,7 @@ function RoutineRow({ r }: { r: Routine }) {
           <div className="truncate text-sm font-medium text-text">{r.title}</div>
           <div className="mt-0.5 text-xs text-text-muted">
             {r.exercises} exercise{r.exercises === 1 ? "" : "s"}
+            {synced && <span className="text-success"> · on Garmin</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -178,7 +187,9 @@ interface BulkState {
   done: boolean;
 }
 
-export function HevyRoutinesList() {
+/** `syncedIds`: Hevy ids of the routines the synced table has on Garmin. */
+export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
+  const onGarmin = new Set(syncedIds);
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -323,7 +334,7 @@ export function HevyRoutinesList() {
         <>
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface-elevated">
             {filtered.map((r) => (
-              <RoutineRow key={r.id} r={r} />
+              <RoutineRow key={r.id} r={r} onGarmin={onGarmin.has(String(r.id))} />
             ))}
           </ul>
           <p className="mt-2 text-xs text-text-muted tabular-nums">
