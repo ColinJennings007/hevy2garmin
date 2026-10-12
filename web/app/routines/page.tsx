@@ -142,7 +142,11 @@ export default async function RoutinesPage() {
         calendar date. Synced routines are listed below.
       </div>
 
-      {data.dbConfigured && <HevyRoutinesList />}
+      {data.dbConfigured && (
+        <HevyRoutinesList
+          syncedIds={data.rows.filter((r) => r.status !== "missing_on_garmin").map((r) => r.hevy_routine_id)}
+        />
+      )}
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
