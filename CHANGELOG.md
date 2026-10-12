@@ -34,6 +34,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `init` no longer reports a Garmin login it could not save. It checks the token folder can be written before asking for the password, and says so if the token file did not appear afterwards. In Docker on Linux a host folder that Docker created belongs to root, and the image runs as uid 999, so the login was lost and every later run failed with "No cached tokens" (#651, #653).
 - The Docker section of the README mounts both folders for `init`, recommends named volumes, explains uid 999 for host folders, and tells docker-compose users how to reuse their old volumes (#651, #652).
 
+## [0.14.0 (npm)] - 2026-10-12
+
+### Fixed
+
+- `syncOneWorkout` passes `resync: true` to `markSynced` when it resyncs a workout into its stored Garmin activity (`targetActivityId`), and `MarkSyncedOpts` gains the optional `resync`. A store can then keep the row's original sync time instead of moving the workout to the top of its lists. Every other write leaves it out (#709).
+
 ## [0.13.0 (npm)] - 2026-10-09
 
 ### Added
