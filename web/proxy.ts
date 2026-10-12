@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { countVisit } from "@/lib/visit-counter";
 
 /* Session verify is INLINED here (not imported from @/lib/auth) because Vercel's
    proxy bundler rejects a cross-module reference from the proxy even when the
@@ -184,7 +185,9 @@ function demoRefusal(): NextResponse {
 /** Gate every page + API route behind the shared-password session (mirrors auth.py).
     When no secret/password is set: open in development, but a production deploy serves only
     the setup and login pages until one is configured (#550). */
-export async function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest, event?: NextFetchEvent) {
+  // Optional visit counter: does nothing unless COLLECTOR_URL and COLLECTOR_TOKEN are set.
+  countVisit(req, event);
   const { pathname } = req.nextUrl;
   if (STATIC_PREFIX.test(pathname)) return NextResponse.next();
   // Before the auth gate on purpose: a demo with auth disabled is still read-only.
