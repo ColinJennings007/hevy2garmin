@@ -1,9 +1,9 @@
 /**
  * Build a Garmin Connect planned-workout payload from a Hevy routine — the body
  * for POST /workout-service/workout. Ported from routine.py
- * (routine_to_garmin_workout): a timed rest step between consecutive sets,
- * warmup vs. working step types, per-set weights in kg or lb, and the provenance
- * marker in the description. The numeric enum ids were reverse-engineered +
+ * (routine_to_garmin_workout): a timed rest step after each set, warmup vs.
+ * working step types, per-set weights in kg or lb, and the provenance marker in
+ * the description. The numeric enum ids were reverse-engineered +
  * validated against a real Garmin export in the Python.
  *
  * Identical consecutive sets become one repeat block ("3 sets" in Garmin, as
@@ -130,8 +130,15 @@ export function routineToGarminWorkout(
   const steps: Step[] = [];
   let order = 1;
   let groupId = 0;
+  // Hevy's rest timer runs after every set, the last set of an exercise included,
+  // so the rest before the next exercise is a real step. Only the very last set of
+  // the workout has none after it (#730).
+  let lastExercise = -1;
+  exercises.forEach((e, idx) => {
+    if ((e.sets ?? []).length > 0) lastExercise = idx;
+  });
 
-  for (const exercise of exercises) {
+  for (const [exerciseIdx, exercise] of exercises.entries()) {
     const title = exercise.title || exercise.name || "Exercise";
     const { category, subcategory } = lookupExercise(title, exercise.exercise_template_id ?? null);
     const [categoryStr, exerciseNameStr] = fitExerciseStrings(category, subcategory);
@@ -143,7 +150,7 @@ export function routineToGarminWorkout(
       // A run of identical consecutive sets.
       let n = 1;
       while (i + n < sets.length && setKey(sets[i + n]) === setKey(sets[i])) n += 1;
-      const lastRun = i + n === sets.length;
+      const endsWorkout = exerciseIdx === lastExercise && i + n === sets.length;
 
       if (n >= 2) {
         // One repeat block of n rounds, each the set and its rest. Garmin numbers
@@ -168,17 +175,17 @@ export function routineToGarminWorkout(
           numberOfIterations: n,
           endCondition: END_ITERATIONS,
           endConditionValue: n,
-          // The rest after the last round is the rest before the next run of this
-          // exercise; after its last set there is none, as with single sets.
-          skipLastRestStep: Boolean(restSeconds) && lastRun,
+          // The rest after the last round is the rest before whatever comes next;
+          // only the block that ends the workout skips it.
+          skipLastRestStep: Boolean(restSeconds) && endsWorkout,
           smartRepeat: false,
           workoutSteps: children,
         });
       } else {
         steps.push(buildStep(order, sets[i], title, categoryStr, exerciseNameStr, weightUnit));
         order += 1;
-        // Rest goes BETWEEN sets of the same exercise, not after the last one.
-        if (restSeconds && !lastRun) {
+        // Rest after the set, unless it is the last set of the workout.
+        if (restSeconds && !endsWorkout) {
           steps.push(restStep(order, restSeconds));
           order += 1;
         }

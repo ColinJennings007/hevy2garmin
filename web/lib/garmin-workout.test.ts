@@ -126,8 +126,35 @@ describe("routineToGarminWorkout", () => {
     expect(orders).toEqual(orders.map((_, i) => i + 1));
     const groups = steps.filter((s) => s.type === "RepeatGroupDTO");
     expect(groups.map((g) => g.childStepId)).toEqual([1, 2]);
+    // only the block that ends the workout skips its last rest (#730)
+    expect(groups.map((g) => g.skipLastRestStep)).toEqual([false, true]);
     // timed sets group too, and end on time
     expect((groups[1].workoutSteps as Step[])[0]).toMatchObject({ endCondition: { conditionTypeKey: "time" }, endConditionValue: 60 });
+  });
+
+  it("keeps the rest after an exercise's last set when another exercise follows (#730)", () => {
+    const r: HevyRoutine = {
+      exercises: [
+        { title: "Pull Up", rest_seconds: 90, sets: [{ type: "normal", reps: 10 }] },
+        { title: "Lat Pulldown (Cable)", rest_seconds: 60, sets: [1, 2].map(() => ({ type: "normal", reps: 10, weight_kg: 50 })) },
+        { title: "Hip Abduction (Machine)", rest_seconds: 45, sets: [1, 2].map(() => ({ type: "normal", reps: 12, weight_kg: 40 })) },
+        { title: "Cable Core Press", rest_seconds: 45, sets: [1, 2, 3].map(() => ({ type: "normal", reps: 10, weight_kg: 5 })) },
+      ],
+    };
+    const steps = topSteps(r);
+    expect(steps.map(key)).toEqual(["interval", "rest", "repeat", "repeat", "repeat"]);
+    expect(steps[1]).toMatchObject({ endConditionValue: 90 });
+    expect(steps.filter((s) => s.type === "RepeatGroupDTO").map((g) => g.skipLastRestStep)).toEqual([false, false, true]);
+  });
+
+  it("an exercise with no sets does not count as the last one", () => {
+    const r: HevyRoutine = {
+      exercises: [
+        { title: "Squat (Barbell)", rest_seconds: 120, sets: [1, 2].map(() => ({ type: "normal", reps: 5, weight_kg: 100 })) },
+        { title: "Stretching", rest_seconds: 30, sets: [] },
+      ],
+    };
+    expect(topSteps(r)[0]).toMatchObject({ type: "RepeatGroupDTO", skipLastRestStep: true });
   });
 
   it("a single set is a plain step with no rest after it", () => {

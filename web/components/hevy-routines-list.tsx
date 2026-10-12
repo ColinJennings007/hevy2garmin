@@ -31,13 +31,13 @@ function RoutineRow({ r }: { r: Routine }) {
     setMsg(null);
     try {
       const res = await fetch(withBasePath(`/api/routines/${encodeURIComponent(r.id)}/sync`), { method: "POST" });
-      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string };
       if (!res.ok || !d.ok) {
         setError(d.error ?? `Request failed (${res.status}).`);
         return;
       }
       setSynced(true);
-      setMsg("Synced to Garmin as a planned workout.");
+      setMsg(d.status === "skipped" ? "Already on Garmin, nothing changed." : "Synced to Garmin as a planned workout.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
