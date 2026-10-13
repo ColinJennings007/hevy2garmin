@@ -10,6 +10,7 @@ It prints where the match is and the number of the term in the list.
 
 A pull request from a fork cannot read secrets, so there the check prints a notice and passes.
 """
+
 import os
 import re
 import subprocess
@@ -17,8 +18,11 @@ import sys
 
 
 def patterns(name):
-    return [re.compile(line.strip(), re.IGNORECASE) for line in os.environ.get(name, "").splitlines()
-            if line.strip()]
+    return [
+        re.compile(line.strip(), re.IGNORECASE)
+        for line in os.environ.get(name, "").splitlines()
+        if line.strip()
+    ]
 
 
 def git(*args):
@@ -46,7 +50,9 @@ def texts(base, head):
 def main():
     terms = patterns("TERMS")
     if not terms:
-        print("No term list is available (a pull request from a fork cannot read secrets). Skipped.")
+        print(
+            "No term list is available (a pull request from a fork cannot read secrets). Skipped."
+        )
         return 0
     allow = patterns("ALLOW")
     hits = 0
@@ -58,7 +64,9 @@ def main():
                 print(f"{where} matches term {number}")
                 hits += 1
     if hits:
-        print(f"{hits} match(es). Rewrite these places for a reader outside the project and push again.")
+        print(
+            f"{hits} match(es). Rewrite these places for a reader outside the project and push again."
+        )
         return 1
     print(f"Checked against {len(terms)} terms. Nothing matched.")
     return 0
